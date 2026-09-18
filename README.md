@@ -1,8 +1,10 @@
 # TripSpec
 
-Spec-driven travel planner chatbot on local **Ollama**. Train behaviour with **SPECs**, golden scenarios, and acceptance evals (Maya-style) — **not** weight fine-tuning.
+Spec-driven **travel planner** on local **Ollama**. You name a country or city; TripSpec discusses it, writes a day plan, offers inventory options, and schedules in-app reminders. Behaviour comes from SPECs and evals — not fine-tuning.
 
 > Demo travel-planner agent trained with Spec-Driven Development on Ollama. SPECs + golden scenarios + acceptance evals drive system prompts and tools — same pattern as Maya Travel AI, sized for a live workshop.
+
+Workshop talk and the before/after evidence: [`docs/README.md`](./docs/README.md).
 
 ## What “train” means
 
@@ -38,31 +40,18 @@ Env:
 | `TRIPSPEC_EVAL_MODE` | auto (`live` if Ollama up, else `mock`) |
 | `AOR_CONTROL_PLANE` | `~/src/agent-on-rails/agent-on-rails-control-plane` |
 
-## Scope (1-hour live build)
+## Scope
 
-**In:** trip intake → clarifying Qs → 3 itinerary options from **stub inventory** → never invent prices/hotels → Indonesian-first voice.
+**In:** discuss a country or city from the local guide → one clarifying question → day plan → 3 flights from stub inventory → hotels after a pick → in-app reminder schedule. Bahasa, detailed, never invent.
 
-**Out:** real Anamaya booking, policy plafon, WhatsApp, payment, ticket PDF, multi-tenant packs.
-
-## Layout
-
-```
-specs/           SPEC-001…004 + training/ (S1–S5, eval checklist)
-contracts/       capability-pack schema + tripspec-nl.baseline.json
-src/agent/       compose (pack → prompt), tools, Ollama runner
-src/eval/        judges + run-scenarios
-src/inventory/   mock flights/hotels
-apps/chat/       TripSpec Next.js UI
-scripts/         train.sh, demo.sh
-```
+**Out:** real booking, live visa/weather APIs, email/WhatsApp/push, payment, ticket PDF.
 
 ## Webinar arc (~45–50 min)
 
-1. **Prompt-only fail** — invent hotels → show FAIL  
-2. **Write SPEC-004 + pack hard_rules** → grounded  
-3. **`npm run train`** → green S1–S5  
-4. **Tighten voice** in SPEC-002 / pack → re-train (no weight changes)  
-5. **Optional:** tool call to mock inventory in the UI  
+1. Prompt-only still invents a trip. Show the old before transcripts.
+2. Walk SPEC-001 (discuss) → SPEC-003 (plan) → SPEC-005 (notify).
+3. `npm run train` on S1–S5.
+4. Change a day line or a reminder rule in the guide/pack, re-train. Weights stay `qwen3.5:latest`.
 
 ## Scripts
 
@@ -82,4 +71,4 @@ Training deep-dive: [`specs/training/HOWTO-TRAINING.md`](./specs/training/HOWTO-
 
 - **Repo:** `sdd-travel-planner`
 - **UI nickname:** **TripSpec**
-- **Voice:** Bahasa-first UI + agent (`kamu`, WhatsApp-straight)
+- **Voice:** Bahasa-first planner (`kamu`). Detailed, grounded, not a brochure.

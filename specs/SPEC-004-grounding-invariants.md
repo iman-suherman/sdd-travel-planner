@@ -1,37 +1,17 @@
-# SPEC-004 — Grounding invariants
+# SPEC-004 — Grounding
 
 - **Status:** ACTIVE
-- **Owner:** TripSpec demo
-- **Related:** SPEC-001, SPEC-002, SPEC-003, `specs/training/`
 - **MVP:** yes
 
-## 1. Behaviour
+## Behaviour
 
-SPEC-004 owns **facts grounding**. This is the webinar “aha”: freeform prompts invent hotels; pack hard_rules + evals stop that.
+Prices, flight numbers, hotel names, day titles, visa lines, and reminder titles come from the last tool JSON.
 
-Observable outcomes:
+1. A fare that is not in inventory is refused. Never confirmed.
+2. If the model invents, `prefer_template_when_ungrounded` replaces the reply with tool facts only.
+3. Do not add neighbourhoods, airlines, or “bonus” perks that the tools did not return.
 
-1. **Never invent** prices, hotel names, flight numbers, weather, or traveler names.
-2. Every price / hotel / flight string in the reply must be ⊆ last tool result (or grounded `facts` JSON).
-3. If the model invents or ignores facts → **FAIL eval** and/or **template fallback** that only uses tool facts.
-4. If user asks for a price not in inventory → refuse / clarify — never invent. *(S4)*
+## Acceptance
 
-## 2. Machine contract
-
-Pack MUST include hard rules equivalent to:
-
-- `NEVER invent prices, hotels, or flight numbers`
-- `ONLY use tool / facts JSON`
-- `prefer_template_when_ungrounded: true`
-
-Locked invariants: `facts-grounding`, `no-cross-user-leak`.
-
-## 3. Acceptance criteria
-
-- **Given** tool facts with known prices, **When** TripSpec lists options, **Then** every price/name ⊆ facts. *(S2)*
-- **Given** user asks for a fare not in inventory, **When** TripSpec replies, **Then** refuses / clarifies — no invented number. *(S4)*
-- **Given** LLM invents a hotel, **When** compose finishes with `prefer_template_when_ungrounded`, **Then** fallback lists only grounded options.
-
-## 4. Non-goals
-
-- Live inventory APIs, multi-tenant isolation beyond demo single-user.
+- **Given** “Garuda jam 3 pagi harga 900rb”, **Then** refuse. *(S4)*
+- Every `Rp` in a propose turn is in the tool payload.

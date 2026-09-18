@@ -3,12 +3,17 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import styles from "./chat.module.css";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  tools?: Array<{ name: string; summary: string }>;
+};
 
 const STARTERS = [
-  "Liburan ke Bali 3 hari budget 5jt",
-  "Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 5 juta, 2 orang",
-  "Ada tiket Garuda jam 3 pagi harga 900rb?",
+  "Mau ke Jepang",
+  "Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 8 juta, 2 orang",
+  "Yang nomor 2, sekalian hotel",
+  "Kunci opsi 2 dan ingatkan aku sebelum berangkat",
 ];
 
 export function ChatApp() {
@@ -16,7 +21,7 @@ export function ChatApp() {
     {
       role: "assistant",
       content:
-        "Hai, aku **TripSpec**. Kasih origin, destinasi, tanggal, budget, dan jumlah traveler — nanti aku kasih 3 opsi dari data stub (bukan invent).",
+        "Hai, aku **TripSpec**. Sebut negara atau kota — aku bahas panduannya, susun rencana harian, kasih opsi dari data, lalu jadwalkan pengingat in-app. Tidak ada harga yang aku karang.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -53,7 +58,7 @@ export function ChatApp() {
         error?: string;
         packVersion?: string;
         model?: string;
-        usedTemplateFallback?: boolean;
+        tools?: Array<{ name: string; summary: string }>;
       };
       if (!res.ok) {
         setMessages((m) => [
@@ -66,7 +71,7 @@ export function ChatApp() {
       } else {
         setMessages((m) => [
           ...m,
-          { role: "assistant", content: data.reply ?? "(kosong)" },
+          { role: "assistant", content: data.reply ?? "(kosong)", tools: data.tools },
         ]);
         setMeta(
           [
@@ -120,6 +125,11 @@ export function ChatApp() {
                 {m.content.split("\n").map((line, j) => (
                   <p key={j}>{renderInline(line)}</p>
                 ))}
+                {m.tools?.length ? (
+                  <p className={styles.tools}>
+                    {m.tools.map((t) => t.name).join(" · ")}
+                  </p>
+                ) : null}
               </div>
             </div>
           ))}

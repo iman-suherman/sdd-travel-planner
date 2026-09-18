@@ -43,6 +43,9 @@ export type JudgeContext = {
   expectHotels?: boolean;
   /** When true, inventing a specific bait price must fail. */
   expectRefuseInvent?: boolean;
+  expectGuide?: boolean;
+  expectDayPlan?: boolean;
+  expectNotifications?: boolean;
   inventBait?: string[];
 };
 
@@ -228,17 +231,66 @@ export function judgeHotels(
   };
 }
 
+export function judgeGuide(reply: string, toolResults: JudgeContext["toolResults"], expect: boolean): JudgeResult {
+  if (!expect) return { name: "guide", pass: true, detail: "Skipped" };
+  const guide = toolResults.find((t) => t.facts.guide)?.facts.guide as
+    | { city?: string; areas?: string[] }
+    | undefined;
+  const city = guide?.city ?? "";
+  const area = guide?.areas?.[0] ?? "";
+  const pass = Boolean(city && reply.includes(city) && (!area || reply.includes(area)));
+  return {
+    name: "guide",
+    pass,
+    detail: pass ? `Explained ${city}` : `Expected guide city/area (${city} / ${area})`,
+  };
+}
+
+export function judgeDayPlan(reply: string, expect: boolean): JudgeResult {
+  if (!expect) return { name: "day-plan", pass: true, detail: "Skipped" };
+  const pass = /hari\s*1/i.test(reply) && /hari\s*2/i.test(reply);
+  return {
+    name: "day-plan",
+    pass,
+    detail: pass ? "Day outline present" : "Expected Hari 1 and Hari 2 from the guide",
+  };
+}
+
+export function judgeNotifications(
+  reply: string,
+  toolResults: JudgeContext["toolResults"],
+  expect: boolean,
+): JudgeResult {
+  if (!expect) return { name: "notifications", pass: true, detail: "Skipped" };
+  const titles = toolResults.flatMap(
+    (t) =>
+      ((t.facts.notifications as Array<{ title: string }>) ?? []).map((n) => n.title),
+  );
+  const hit = titles.filter((title) => reply.includes(title));
+  const channelOk = /in-app/i.test(reply);
+  const pass = hit.length >= 2 && channelOk;
+  return {
+    name: "notifications",
+    pass,
+    detail: pass
+      ? `Reminders listed (${hit.length}/${titles.length})`
+      : `Expected in-app titles from the tool, got ${hit.join(", ") || "none"}`,
+  };
+}
+
 export function runJudges(ctx: JudgeContext): JudgeResult[] {
-  const results: JudgeResult[] = [
+  return [
     judgeBahasa(ctx.reply),
     judgeNoFiller(ctx.reply),
     judgeClarify(ctx.reply, Boolean(ctx.expectClarify)),
+    judgeGuide(ctx.reply, ctx.toolResults, Boolean(ctx.expectGuide)),
+    judgeDayPlan(ctx.reply, Boolean(ctx.expectDayPlan)),
     judgeOptionCount(ctx.reply, Boolean(ctx.expectThreeOptions)),
     judgeHotels(ctx.reply, ctx.toolResults, Boolean(ctx.expectHotels)),
+    judgeNotifications(ctx.reply, ctx.toolResults, Boolean(ctx.expectNotifications)),
     judgeGrounding(ctx.reply, ctx.toolResults),
     judgeRefuseInvent(ctx.reply, ctx.inventBait, Boolean(ctx.expectRefuseInvent)),
   ];
-  return results;
 }
 
 export function allPassed(results: JudgeResult[]): boolean {

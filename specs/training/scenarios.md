@@ -1,47 +1,38 @@
-# Golden scenarios — TripSpec (S1–S5)
+# Golden scenarios — TripSpec planner (S1–S5)
 
-Each scenario: setup → user turns → expected behaviour. Run with `npm run train`.
+Run with `npm run train`. Same model throughout. Behaviour changes only when the SPEC or pack changes.
 
-## S1 — Partial intake → clarify → then 3 options
+## S1 — Discuss a country, then one missing slot
 
-- **Given** live pack + mock inventory
-- **When** user: “Liburan ke Bali 3 hari budget 5jt”
-- **Then** ask missing origin and/or concrete dates (one short Q first)
-- **And** after slots complete in follow-up, present exactly **3** grounded options
-- **Maps:** SPEC-001, SPEC-003
+- **When** “Mau ke Jepang”
+- **Then** explain Tokyo from `get_destination_guide` (areas + Hari 1–2) and ask one missing slot (origin)
+- **And** no fare
+- **Maps:** SPEC-001, SPEC-002
 
-## S2 — Full slots in one message
+## S2 — Full slots → day plan + 3 flights
 
-- **Given** live pack + ≥3 flight facts
-- **When** user: “Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 5 juta, 2 orang”
-- **Then** present **3** options with prices/names from tool facts only
-- **And** one CTA (`1/2/3` or refine)
-- **And** Bahasa, no filler
-- **Maps:** SPEC-001–004
-
-## S3 — Hotels after flights
-
-- **Given** flights already presented (or flight pick)
-- **When** user: “Hotelnya yang murah aja”
-- **Then** hotels only after flight pick **or** explicit hotel-only request
-- **And** hotel names/prices ⊆ hotel tool facts
+- **When** “Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 8 juta, 2 orang”
+- **Then** day outline from the Bali guide and exactly 3 flights with prices from `search_flights`
 - **Maps:** SPEC-003, SPEC-004
 
-## S4 — Refuse inventing missing price
+## S3 — Pick, then hotels
 
-- **Given** inventory has no “Rp 999.999” / unknown airline fare
-- **When** user: “Ada tiket Garuda jam 3 pagi harga 900rb?”
-- **Then** refuse / clarify — **never invent** that price
+- **When** “Yang nomor 2, sekalian hotel di Bali”
+- **Then** hotels from `search_hotels` only, still naming the locked flight
+- **Maps:** SPEC-003
+
+## S4 — Refuse a fare that is not in inventory
+
+- **When** “Ada tiket Garuda jam 3 pagi harga 900rb?”
+- **Then** refuse. Required gate.
 - **Maps:** SPEC-004
 
-## S5 — English mid-chat; stay Bahasa / bilingual
+## S5 — Lock the plan and notify
 
-- **Given** active Bahasa conversation
-- **When** user: “Can you explain option 2 in English?”
-- **Then** stay Bahasa-first or brief bilingual — not English brochure tone
-- **And** still grounded
-- **Maps:** SPEC-002
+- **When** “Kunci opsi 2 dan ingatkan aku sebelum berangkat”
+- **Then** every in-app reminder from `plan_notifications` (titles and offsets). No email/WhatsApp invented.
+- **Maps:** SPEC-005
 
-## Traceability
+## Pass bar
 
-Train behaviour with SPECs + this pack + evals — not weight fine-tuning.
+S4 must pass. At least 4 of 5 overall.

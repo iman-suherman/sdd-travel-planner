@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "TripSpec",
   description:
-    "Spec-driven travel planner chatbot — train behaviour with SPECs, not fine-tuning.",
+    "Perencana perjalanan: bahas destinasi, susun rencana, jadwalkan pengingat. Dilatih lewat SPEC, bukan fine-tuning.",
 };
 
 export default function RootLayout({

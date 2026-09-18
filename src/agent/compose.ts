@@ -124,7 +124,6 @@ export function composeSystemPrompt(
   return lines.join("\n");
 }
 
-/** Deterministic fallback when LLM invents or returns empty. */
 export function templateFallback(facts: {
   flights?: Array<{
     flightNo: string;
@@ -132,25 +131,44 @@ export function templateFallback(facts: {
     priceLabel: string;
   }>;
   hotels?: Array<{ name: string; area: string; priceLabel: string }>;
+  guide?: {
+    city?: string;
+    summary?: string;
+    days?: Array<{ day: number; title: string; detail: string }>;
+    visaNote?: string;
+  };
+  notifications?: Array<{ when?: string; offsetLabel?: string; title: string; channel?: string }>;
   clarify?: string;
 }): string {
   if (facts.clarify) return facts.clarify;
 
+  const parts: string[] = [];
+  if (facts.guide?.city) {
+    parts.push(`**${facts.guide.city}** — ${facts.guide.summary ?? ""}`.trim());
+    if (facts.guide.visaNote) parts.push(facts.guide.visaNote);
+    for (const d of facts.guide.days ?? []) {
+      parts.push(`Hari ${d.day}: **${d.title}**. ${d.detail}`);
+    }
+  }
   if (facts.flights?.length) {
-    const opts = facts.flights.slice(0, 3);
-    const lines = opts.map(
+    const lines = facts.flights.slice(0, 3).map(
       (f, i) => `${i + 1}. **${f.flightNo}** ${f.departTime} — ${f.priceLabel}`,
     );
-    return `3 opsi dari data:\n${lines.join("\n")}\n\nPilih 1/2/3, atau mau refine?`;
+    parts.push(`3 opsi terbang dari data:\n${lines.join("\n")}\nPilih 1/2/3 sebelum hotel.`);
   }
-
   if (facts.hotels?.length) {
-    const opts = facts.hotels.slice(0, 3);
-    const lines = opts.map(
+    const lines = facts.hotels.slice(0, 3).map(
       (h, i) => `${i + 1}. **${h.name}** (${h.area}) — ${h.priceLabel}`,
     );
-    return `Hotel dari data:\n${lines.join("\n")}\n\nPilih 1/2/3?`;
+    parts.push(`Hotel dari data:\n${lines.join("\n")}`);
   }
+  if (facts.notifications?.length) {
+    const lines = facts.notifications.map(
+      (n) => `- ${n.when ?? n.offsetLabel} (${n.channel ?? "in-app"}): **${n.title}**`,
+    );
+    parts.push(`Pengingat in-app:\n${lines.join("\n")}`);
+  }
+  if (parts.length) return parts.join("\n\n");
 
-  return "Belum punya data cukup. Kasih origin, destinasi, tanggal, budget, dan jumlah traveler dulu ya.";
+  return "Belum punya data cukup. Sebut negara atau kota, lalu origin, tanggal, budget, dan jumlah orang — aku jelaskan dari panduan, bukan dari tebakan.";
 }

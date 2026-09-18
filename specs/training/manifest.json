@@ -2,18 +2,16 @@
   "product": "TripSpec",
   "kind": "chatbot-training-pack",
   "spec_ref": "SPEC-002",
-  "related_specs": [
-    "SPEC-001",
-    "SPEC-002",
-    "SPEC-003",
-    "SPEC-004"
-  ],
+  "related_specs": ["SPEC-001", "SPEC-002", "SPEC-003", "SPEC-004", "SPEC-005"],
   "scenarios": ["S1", "S2", "S3", "S4", "S5"],
   "maps_to_evals": [
     "deterministic-bahasa",
-    "deterministic-grounding",
+    "deterministic-guide",
+    "deterministic-day-plan",
     "deterministic-option-count",
-    "deterministic-no-filler",
+    "deterministic-hotels",
+    "deterministic-notifications",
+    "deterministic-grounding",
     "deterministic-refuse-invent"
   ],
   "pack": "contracts/packs/tripspec-nl.baseline.json",

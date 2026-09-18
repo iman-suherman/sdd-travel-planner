@@ -28,40 +28,44 @@ type Scenario = {
 const SCENARIOS: Scenario[] = [
   {
     id: "S1",
-    title: "Partial intake → clarify",
-    turns: [{ role: "user", content: "Liburan ke Bali 3 hari budget 5jt" }],
-    judge: { expectClarify: true },
-    mockReply: "Oke ke Bali 3 hari, budget ~5jt. Berangkat dari mana, dan tanggal berapa?",
+    title: "Discuss country, then one missing slot",
+    turns: [{ role: "user", content: "Mau ke Jepang" }],
+    forceTools: [{ name: "get_destination_guide", arguments: { query: "Jepang" } }],
+    judge: { expectClarify: true, expectGuide: true, expectDayPlan: true },
+    mockReply:
+      "Kalau Jepang tanpa kota, panduan memakai Tokyo (Shinjuku, Asakusa, Shibuya). Visa tidak aku terbitkan — cek sumber resmi.\n\nHari 1: tiba di NRT, hotel Shinjuku.\nHari 2: Asakusa lalu Shibuya.\nHari 3: longgar, ke NRT.\n\nBerangkat dari mana?",
   },
   {
     id: "S2",
-    title: "Full slots → 3 grounded options",
+    title: "Full slots → day plan + 3 flights",
     turns: [
       {
         role: "user",
         content:
-          "Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 5 juta, 2 orang",
+          "Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 8 juta, 2 orang",
       },
     ],
     forceTools: [
+      { name: "get_destination_guide", arguments: { query: "Bali" } },
       {
         name: "search_flights",
         arguments: { origin: "Jakarta", destination: "Bali", limit: 3 },
       },
     ],
-    judge: { expectThreeOptions: true },
-    mockReply: undefined, // built from template
+    judge: { expectGuide: true, expectDayPlan: true, expectThreeOptions: true },
+    mockReply:
+      "Bali, 12–15 Oktober, 2 orang, dari Jakarta. Warga Indonesia tidak butuh visa ke Bali.\n\nHari 1: Tiba dan pantai selatan (Kuta atau Seminyak).\nHari 2: Ubud.\nHari 3: Sanur lalu pulang.\n\n3 opsi dari data:\n1. **QZ-751** 06:30 — Rp 890.000\n2. **GA-404** 08:15 — Rp 1.250.000\n3. **JT-39** 14:40 — Rp 760.000\n\nPilih 1/2/3?",
   },
   {
     id: "S3",
-    title: "Hotels after explicit hotel request",
+    title: "After pick, hotels from data",
     turns: [
       {
         role: "assistant",
         content:
-          "3 opsi CGK→DPS:\n1. QZ-751 — Rp 890.000\n2. GA-404 — Rp 1.250.000\n3. JT-39 — Rp 760.000\nPilih 1/2/3?",
+          "3 opsi: 1. QZ-751 2. GA-404 3. JT-39. Pilih 1/2/3?",
       },
-      { role: "user", content: "Hotelnya yang murah aja" },
+      { role: "user", content: "Yang nomor 2, sekalian hotel di Bali" },
     ],
     forceTools: [
       {
@@ -70,15 +74,14 @@ const SCENARIOS: Scenario[] = [
       },
     ],
     judge: { expectHotels: true, expectThreeOptions: true },
+    mockReply:
+      "Opsi 2 **GA-404** terkunci. Hotel dari data, yang lebih murah dulu:\n1. **Kuta Beach Inn** (Kuta) — Rp 450.000/malam\n2. **Ubud Rice Lodge** (Ubud) — Rp 520.000/malam\n3. **Sanur Coast Hotel** (Sanur) — Rp 590.000/malam\n\nPilih 1/2/3?",
   },
   {
     id: "S4",
     title: "Refuse invent missing price",
     turns: [
-      {
-        role: "user",
-        content: "Ada tiket Garuda jam 3 pagi harga 900rb?",
-      },
+      { role: "user", content: "Ada tiket Garuda jam 3 pagi harga 900rb?" },
     ],
     forceTools: [
       {
@@ -92,24 +95,26 @@ const SCENARIOS: Scenario[] = [
   },
   {
     id: "S5",
-    title: "English mid-chat → Bahasa/bilingual",
+    title: "Lock option → in-app reminders",
     turns: [
       {
         role: "assistant",
-        content:
-          "3 opsi:\n1. QZ-751 06:30 — Rp 890.000\n2. GA-404 08:15 — Rp 1.250.000\n3. JT-39 14:40 — Rp 760.000\nPilih 1/2/3?",
+        content: "Pilih 1/2/3? Opsi 2 adalah GA-404.",
       },
-      { role: "user", content: "Can you explain option 2 in English?" },
+      {
+        role: "user",
+        content: "Kunci opsi 2 dan ingatkan aku sebelum berangkat",
+      },
     ],
     forceTools: [
       {
-        name: "search_flights",
-        arguments: { origin: "Jakarta", destination: "Bali", limit: 3 },
+        name: "plan_notifications",
+        arguments: { departDate: "12 Oktober", destination: "Bali" },
       },
     ],
-    judge: {},
+    judge: { expectNotifications: true },
     mockReply:
-      "Opsi 2: **GA-404** berangkat 08:15, Rp 1.250.000 / pax (dari data). Mau ganti ke opsi lain, atau lanjut hotel?",
+      "Opsi 2 terkunci. Pengingat in-app dari jadwal:\n- 14 hari sebelum berangkat: **Cek dokumen perjalanan**\n- 7 hari sebelum berangkat: **Kunci penerbangan dan hotel**\n- 1 hari sebelum berangkat: **Pengingat berangkat**\n\nItu saja. Tidak ada channel lain di data.",
   },
 ];
 

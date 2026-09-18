@@ -225,18 +225,46 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
     const lastHotels = toolResults
       .filter((t) => t.name === "search_hotels")
       .at(-1);
-    const flights = (lastFlights?.facts.flights as Array<{
-      flightNo: string;
-      departTime: string;
-      priceLabel: string;
-    }>) ?? [];
-    const hotels = (lastHotels?.facts.hotels as Array<{
-      name: string;
-      area: string;
-      priceLabel: string;
-    }>) ?? [];
-    if (flights.length || hotels.length) {
-      reply = templateFallback({ flights, hotels });
+    const lastGuide = toolResults
+      .filter((t) => t.name === "get_destination_guide")
+      .at(-1);
+    const lastNotes = toolResults
+      .filter((t) => t.name === "plan_notifications")
+      .at(-1);
+    const flights =
+      (lastFlights?.facts.flights as Array<{
+        flightNo: string;
+        departTime: string;
+        priceLabel: string;
+      }>) ?? [];
+    const hotels =
+      (lastHotels?.facts.hotels as Array<{
+        name: string;
+        area: string;
+        priceLabel: string;
+      }>) ?? [];
+    const guide = lastGuide?.facts.guide as
+      | {
+          city?: string;
+          summary?: string;
+          days?: Array<{ day: number; title: string; detail: string }>;
+          visaNote?: string;
+        }
+      | undefined;
+    const notifications =
+      (lastNotes?.facts.notifications as Array<{
+        when?: string;
+        offsetLabel?: string;
+        title: string;
+        channel?: string;
+      }>) ?? [];
+    if (flights.length || hotels.length || guide || notifications.length) {
+      reply = templateFallback({
+        flights,
+        hotels,
+        guide: guide ?? undefined,
+        notifications,
+      });
       usedTemplateFallback = true;
     } else if (!reply) {
       reply = templateFallback({});

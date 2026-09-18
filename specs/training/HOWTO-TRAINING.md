@@ -54,9 +54,10 @@ product/requirements.md
 | Item | Value |
 | --- | --- |
 | Product | **TripSpec** |
-| Voice pack | `tripspec-nl` — see `contracts/packs/tripspec-nl.baseline.json` |
+| Voice pack | `tripspec-nl@2026-09-19.1` — planner: discuss, day plan, notify |
 | Model | `qwen3.5:latest` (`npm run pull`) |
-| Golden gate | S1–S5 — mock **PASS 5/5** (see `specs/training/results/latest.md`) |
+| Golden gate | S1–S5 redefined for the planner. Re-run `npm run train` after this pack. |
+| Presentation | [`docs/presentation.md`](../../docs/presentation.md) · before/after execution [`docs/training-execution.md`](../../docs/training-execution.md) |
 | AOR guide | `guides/chatbot-training-orchestration.md` |
 | AOR pin | recorded in `.aor/aor-pin.json` after `npm run train:aor` |
 

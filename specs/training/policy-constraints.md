@@ -1,12 +1,10 @@
 # Policy constraints — TripSpec
 
-Runtime / pack constraints agents and trainers must honor.
-
-1. Never invent prices, flights, hotels, weather, or traveler names.
-2. Claims must ground in tool results / `facts` in the same turn.
-3. Present exactly 3 options when ≥3 offers and slots are complete.
-4. Hotels only after flight settled, or explicit hotel-only request.
-5. WhatsApp-straight: no filler openers (`aku bantu ya`, weather invents).
-6. Bahasa Indonesia first; city/airline names may stay English.
-7. Behaviour changes go through SPEC + baseline pack + `npm run train` — not LoRA / weight fine-tuning.
-8. Compose system prompt is built **only** from the capability pack.
+1. Discuss the destination from `get_destination_guide` before selling a fare.
+2. Never invent prices, flights, hotels, visa outcomes, live weather, or reminder channels.
+3. Day titles and areas must come from the guide. Flight and hotel strings must come from search tools.
+4. Exactly 3 flight options when the slots are complete and ≥3 offers exist.
+5. Hotels only after a flight pick, or an explicit hotel ask.
+6. After lock, list the `plan_notifications` schedule (in-app only). Do not add channels.
+7. Bahasa-first, detailed enough to decide, no brochure filler.
+8. Behaviour changes go through SPEC-001…005 + the baseline pack + `npm run train` — not LoRA.
