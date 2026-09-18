@@ -16,4 +16,6 @@ apps/chat/.next/
 # AOR-generated drafts (regenerate with npm run train:aor)
 .aor/generated-control-plane/
 
-# Train results keep latest; ignore noisy stamps if desired — keep all for demo
+# Train results are local. The directory stays via .gitkeep.
+specs/training/results/*
+!specs/training/results/.gitkeep
