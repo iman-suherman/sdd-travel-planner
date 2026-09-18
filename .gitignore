@@ -25,3 +25,7 @@ specs/training/*
 !specs/training/results/
 specs/training/results/*
 !specs/training/results/.gitkeep
+
+# Local captures. Not part of the docs.
+docs/evidence/*
+!docs/evidence/.gitkeep

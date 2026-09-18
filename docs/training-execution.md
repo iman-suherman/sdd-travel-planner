@@ -136,7 +136,6 @@ This is not produced by `npm run train`. It is the contrast capture.
 | Pack | none |
 | Tools | none |
 | Prompt | Brochure writer, told to invent if inventory is missing |
-| File | [evidence/before-prompt-only-2026-09-19.md](./evidence/before-prompt-only-2026-09-19.md) |
 
 | User | What the model did | Why it fails the planner gate |
 | --- | --- | --- |

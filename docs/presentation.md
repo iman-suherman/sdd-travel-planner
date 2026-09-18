@@ -2,15 +2,14 @@
 
 Fifty minutes. The room should leave knowing that a travel planner’s behaviour is a contract you can fail and re-run, not a weight file you retrain.
 
-**Product:** TripSpec, a planner. The traveler names a country or a city. The assistant explains that place, writes the days, offers only what the inventory contains, and schedules reminders when the plan is locked.
+**Product:** TripSpec, a holiday planner. The traveler names a country or a city. The assistant writes the itinerary from the guide, offers flight options with no prices, and schedules reminders when the plan is locked.
 
 **Model, both sides of the demo:** `qwen3.5:latest`. Do not pull another model between the before and the after.
 
 **Pack that defines the after:** `tripspec-nl@2026-09-19.1` in `contracts/packs/tripspec-nl.baseline.json`.
 
-**Evidence to have open before you start:**
+**Have open before you start:**
 
-- Before (live, prompt-only): [evidence/before-prompt-only-2026-09-19.md](./evidence/before-prompt-only-2026-09-19.md)
 - After: whatever `npm run train` just wrote to `specs/training/results/latest.md` (gitignored). The chatbot uses that file.
 - Contract: generated into `specs/` by `npm run demo`. Not committed.
 

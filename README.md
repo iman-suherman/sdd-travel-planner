@@ -1,10 +1,10 @@
 # TripSpec
 
-Spec-driven **travel planner** on local **Ollama**. You name a country or city; TripSpec discusses it, writes a day plan, offers inventory options, and schedules in-app reminders. Behaviour comes from SPECs and evals — not fine-tuning.
+Spec-driven **holiday planner** on local **Ollama**. You name a country or city; TripSpec writes an itinerary from the guide, offers flights with no prices, and schedules in-app reminders. Behaviour comes from the pack and the train report — not fine-tuning.
 
 > Demo travel-planner agent trained with Spec-Driven Development on Ollama. SPECs + golden scenarios + acceptance evals drive system prompts and tools — same pattern as Maya Travel AI, sized for a live workshop.
 
-Workshop talk and the before/after evidence: [`docs/README.md`](./docs/README.md).
+Workshop talk: [`docs/README.md`](./docs/README.md).
 
 ## What “train” means
 
