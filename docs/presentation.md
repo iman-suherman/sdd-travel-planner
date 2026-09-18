@@ -1,256 +1,308 @@
-# TripSpec — presentation
+# TripSpec — yang diucapkan
 
-Fifty minutes. The room should leave knowing the holiday plan is a contract you can fail and re-run. Ollama’s weights do not move. What persists is the generated specs and the train report. The chatbot serves from that report.
+Lima puluh menit. Buka seperti bercerita, bukan seperti membacakan spec.
 
-**Product:** TripSpec, a holiday planner. The traveler names a country or a city. The assistant writes the itinerary from the local guide, offers three flights with no prices, and schedules in-app reminders when a flight is locked.
+Seseorang mau liburan. Kita susun rencananya dari panduan, bukan dari harga. Kalau jawabannya salah, kita ubah aturannya dan nilai percakapan yang sama lagi. Modelnya tidak kita ganti.
 
-**Model:** `qwen3.5:latest` at `http://127.0.0.1:11434`. Same GGUF before and after. Do not pull another model during the hour.
+**Yang mereka dengar dulu:** TripSpec. Sebut negara atau kota, dapat rencana hari, tiga penerbangan tanpa harga, lalu pengingat di dalam aplikasi kalau penerbangannya dikunci.
 
-**Pack the gate scores:** `tripspec-nl@2026-09-19.4` in `contracts/packs/tripspec-nl.baseline.json`. AOR writes this from `contracts/vibe.md`. It is not in git. It is not a spec.
+**Model:** `qwen3.5:latest` di laptop ini. File model yang sama dari awal sampai akhir. Jangan tarik model lain.
 
-**Not in git, written on the demo machine:**
+**Aturan yang dinilai hari ini:** `tripspec-nl@2026-09-19.4`, ditulis dari `contracts/vibe.md`. Tidak masuk git. Ini bukan spec. Chat tidak membaca vibe. Chat membaca aturan yang dihasilkan dari vibe, plus laporan train.
 
-| What persists | Command that writes it | Who reads it |
+**Tidak di git, ditulis di mesin demo:**
+
+| Yang tersimpan | Perintah yang menulisnya | Siapa yang membacanya |
 | --- | --- | --- |
-| `vendor/aor/` | `npm run strap` | Later steps. Not the chatbot. |
-| `specs/requirements/` and `specs/product/` (and the rest of the generated tree) | `npm run specs`, also the start of `npm run demo` | The room, so they can open the spec. The chatbot does not read these files. |
-| `specs/tools/` | The same commands, from `modules.tools.catalog` | The room. A tool chip in the chat opens that file. The model does not read it. |
-| `specs/training/results/<timestamp>.md` and `latest.md` | `npm run train` | The chatbot. Every chat turn appends this report to the system prompt sent to Ollama. |
+| Salinan Agent On Rails di `vendor/aor/` | `npm run strap` | Langkah berikutnya. Bukan chat. |
+| Dokumen di `specs/requirements/` dan `specs/product/` | `npm run specs`, juga awal `npm run demo` | Kita, supaya bisa dibuka. Chat tidak membaca file ini. |
+| Catatan tiap alat di `specs/tools/` | Perintah yang sama | Chip di bawah jawaban. Model tidak membacanya. |
+| Laporan di `specs/training/results/latest.md` | `npm run train` | Chat. Setiap jawaban meniru laporan ini. |
 
-Start the hour with `npm run help`. Green `done` means that step’s folder or model is already on this machine. Yellow `not yet` means it is not. The box at the bottom is the only command to run next. Do not skip it. A pin file without `specs/requirements` and `specs/product` is not a finished spec.
+Mulai dengan `npm run help`. Hijau artinya langkah itu sudah ada di laptop ini. Kuning artinya belum. Kotak di bawah hanya satu perintah. Ikuti itu.
 
-Say this once, then show the folders:
+Ucapkan ini sekali, lalu diam sebentar:
 
-> We did not fine-tune Qwen. We generate the spec, score five replies, and save the report. The chatbot Ollama serves is that saved report plus the pack. When a reply is wrong, we edit the pack and run the same scenarios again.
+> Modelnya tidak kita latih ulang. Kita tulis aturannya, nilai enam percakapan, simpan hasilnya. Chat mengikuti hasil itu. Kalau jawabannya salah, kita ubah aturannya dan nilai lagi. Modelnya tetap.
 
 ---
 
-## Demo plan
+## Rencana demo
 
-Six commands, in this order. `npm run help` prints the status beside each one.
+Enam perintah, berurutan. `npm run help` mencetak status di samping masing-masing.
 
 ```text
-1  npm run pull        qwen3.5:latest on the local Ollama
-2  npm run strap       copy Agent On Rails into vendor/aor
-3  npm run contracts   contracts/vibe.md → pack and capability schema
-4  npm run specs       generate specs/ from that contract  (gitignored)
-5  npm run train       pack + S1–S5 → specs/training/results/latest.md
-6  npm run demo        regenerate specs, then chat on :3000
+1  npm run pull        qwen3.5:latest di Ollama lokal
+2  npm run strap       salin Agent On Rails ke vendor/aor
+3  npm run contracts   contracts/vibe.md → pack dan skema capability
+4  npm run specs       hasilkan specs/ dari kontrak itu  (gitignored)
+5  npm run train       pack + S1–S6 → specs/training/results/latest.md
+6  npm run demo        hasilkan ulang specs, lalu chat di :3000
 ```
 
-What each step is waiting on, and what “done” means:
+```mermaid
+flowchart LR
+  pull[npm run pull] --> strap[npm run strap]
+  strap --> contracts[npm run contracts]
+  contracts --> specs[npm run specs]
+  specs --> train[npm run train]
+  train --> demo[npm run demo]
+```
 
-1. **Pull.** Ollama answers `GET /api/tags` and the tag `qwen3.5:latest` is in the list. If Ollama is down, this step is not yet even if the GGUF is on disk from last week.
-2. **Strap.** `vendor/aor` is on this machine. It is not in git. The control plane is no longer a path outside the repo.
-3. **Contracts.** `contracts/vibe.md` is the entry. Copy that file as the vibe. AOR writes the pack and the capability schema. The chatbot does not read the vibe.
-4. **Generate specs.** After the command, `specs/requirements/` and `specs/product/` exist and contain files. Old `SPEC-001` files left over from an earlier checkout do not count.
-5. **Train.** `latest.md` exists and its pack version equals the pack on disk (`2026-09-19.4`). A report for `@2026-09-19.1` is an older, priced planner. It is not this demo. Re-run train.
-6. **Demo.** The UI is `http://localhost:3000`. The first message the traveler sends is refused until step 5 has a matching report. The footer under the composer shows the model, the pack, and `specs/training/results/latest.md`.
+Apa yang ditunggu tiap langkah, dan apa arti “selesai”:
 
-`npm run train` does not load the previous report. That keeps the score independent. Only the chatbot loads it.
+1. **Pull.** Ollama menjawab `GET /api/tags` dan tag `qwen3.5:latest` ada di daftar. Kalau Ollama mati, langkah ini belum selesai walaupun GGUF sudah ada di disk dari minggu lalu.
+2. **Strap.** `vendor/aor` ada di mesin ini. Tidak di git. Control plane bukan lagi path di luar repo.
+3. **Contracts.** `contracts/vibe.md` adalah pintu masuk. Salin file itu sebagai vibe. AOR menulis pack dan skema capability. Chatbot tidak membaca vibe.
+4. **Hasilkan specs.** Setelah perintah selesai, `specs/requirements/` dan `specs/product/` ada dan berisi file. Sisa `SPEC-001` dari checkout lama tidak dihitung.
+5. **Train.** `latest.md` ada dan versi pack-nya sama dengan pack di disk (`2026-09-19.4`). Laporan `@2026-09-19.1` adalah perencana lama yang masih menyebut harga. Itu bukan demo ini. Jalankan train lagi.
+6. **Demo.** UI-nya `http://localhost:3000`. Pesan pertama traveler ditolak sampai langkah 5 punya laporan yang cocok. Footer di bawah kotak tulis menampilkan model, pack, dan `specs/training/results/latest.md`.
 
-`npm run demo` runs spec generation again, then starts the UI. It does not run the five scenarios. If you only demo, and `latest.md` is missing or stale, the chat will say so.
+`npm run train` tidak memuat laporan sebelumnya. Skornya tetap mandiri. Hanya chatbot yang memuat laporan itu.
+
+`npm run demo` menjalankan generasi spec lagi, lalu menyalakan UI. Perintah ini tidak menjalankan enam skenario. Kalau hanya demo, dan `latest.md` hilang atau basi, chat akan mengatakannya.
 
 ---
 
-## What the traveler gets
+## Apa yang traveler dapat
 
-Draw this once. The outcome of the hour is the bottom of this line, not a fare.
+Gambar sekali. Hasil sesi ini ada di ujung garis, bukan di tarif.
 
 ```text
-"Mau ke Jepang"  or  "Dari Jakarta ke Bali, 12–15 Oktober, 2 orang"
+S1  "Mau ke Jepang"
         │
         ▼
-Guide       summary, areas, season note, visa note, Hari 1–3
-            from get_destination_guide. Common information, not a brochure.
+Panduan     ringkasan, area, catatan musim, catatan visa, Hari 1–3
+            get_destination_guide hanya jalan di giliran ini
         │
         ▼
-Ask once    one missing slot: origin, then dates, then travelers
-            do not ask for a budget
+Tanya sekali  satu slot yang kurang: asal, tanggal, atau jumlah orang
+            jangan tanya budget
         │
         ▼
-Itinerary   those days, in sentences
+S6  "berangkat dari Jakarta, besok, saya dan istri aja"
         │
         ▼
-Fly         exactly 3 options: airline, flight number, depart–arrive
-            no Rp, no juta, no rb
+Lanjut      jangan cetak ulang paragraf panduan pertama
+            besok adalah hari kalender berikutnya, bukan slot yang masih kosong
         │
         ▼
-Stay        only after a pick: hotel name and area, no nightly rate
+Terbang     tepat 3 opsi: maskapai, nomor penerbangan, berangkat–tiba
+            tanpa Rp, tanpa juta, tanpa rb
         │
         ▼
-Notify      three in-app reminders: 14 days, 7 days, 1 day
-            no email, no WhatsApp, no voucher, no price on the lock line
+S3  "Yang nomor 2, sekalian hotel"
+        │
+        ▼
+Menginap    nama hotel dan area saja, tanpa tarif malam
+        │
+        ▼
+S4  "Ada tiket Garuda jam 3 pagi harga 900rb?"
+        │
+        ▼
+Tolak       penerbangan itu tidak ada di data. Tetap tanpa harga.
+        │
+        ▼
+S5  "Kunci opsi 2 dan ingatkan aku sebelum berangkat"
+        │
+        ▼
+Ingatkan    tiga pengingat in-app: 14 hari, 7 hari, 1 hari
+            tanpa email, tanpa WhatsApp, tanpa voucher, tanpa harga di baris kunci
 ```
 
-Guides on disk: **Bali**, **Tokyo** (used when the traveler says Jepang), **Singapore**. Flights on disk: Jakarta (CGK) to DPS, SIN, and NRT. Prices exist in `src/inventory/mock-data.ts` so the file can stay stable. They are stripped before the model sees the tool JSON. If a flight is not in that list, the assistant says it is not in the data and still does not quote a fare.
+S2 bentuk lain, dinilai di gilirannya sendiri: satu kalimat sudah berisi Jakarta, Bali, 12–15 Oktober, dan 2 orang. Panduan dan tiga penerbangan Bali kembali bersama. Jangan tanya dari mana mereka berangkat.
+
+```mermaid
+flowchart LR
+  S1[S1 Mau ke Jepang] --> S6[S6 Jakarta, besok, 2 orang]
+  S6 --> S3[S3 Nomor 2, hotel]
+  S3 --> S4[S4 Tolak jam 3 pagi]
+  S4 --> S5[S5 Kunci, pengingat in-app]
+  S2[S2 Bali, halaman baru]
+```
+
+Panduan di disk: **Bali**, **Tokyo** (dipakai saat traveler bilang Jepang), **Singapore**. Penerbangan di disk: Jakarta (CGK) ke DPS, SIN, dan NRT. Harga ada di `src/inventory/mock-data.ts` supaya file tetap stabil. Harga dibuang sebelum model melihat JSON alat. Kalau penerbangan tidak ada di daftar itu, asisten bilang tidak ada di data dan tetap tidak mengutip tarif.
 
 ---
 
-## 0–8 min — Why an itinerary, not a fare list
+## 0–8 menit — Kenapa itinerary, bukan daftar tarif
 
-Open with “Mau ke Jepang.”
+Buka dengan “Mau ke Jepang.”
 
-What they want back is which city the guide assumes, what the days are, and what you will not invent. They do not want a package price.
+Yang mereka mau kembali adalah kota yang diasumsikan panduan, hari-harinya, dan apa yang tidak akan diada-adakan. Mereka tidak mau harga paket.
 
-A helpful model with a brochure prompt answers the same sentence with a flight number and a fare. That is the failure the rest of the hour is aimed at. You do not need a capture file. The inventions to remember, if you say them, are ones that are not in the inventory: GA 712 at 03:00, QZ 852, a hotel that is not Kuta Beach Inn / Ubud Rice Lodge / Sanur Coast Hotel. The real CGK–DPS rows are QZ-751, GA-404, and JT-39. This demo does not print their fares.
+Model yang “membantu” dengan prompt brosur menjawab kalimat yang sama dengan nomor penerbangan dan tarif. Itulah kegagalan yang dituju sisa sesi ini. Tidak perlu file tangkapan. Yang perlu diingat, kalau disebut, adalah yang tidak ada di inventaris: GA 712 jam 03:00, QZ 852, hotel yang bukan Kuta Beach Inn / Ubud Rice Lodge / Sanur Coast Hotel. Baris CGK–DPS yang nyata adalah QZ-751, GA-404, dan JT-39. Demo ini tidak mencetak tarifnya.
 
-If someone asks “is this Maya?”, the answer is: same training shape as Maya SPEC-017 (spec, pack, golden scenarios, eval), different product. Maya books corporate travel. TripSpec plans a leisure itinerary and stops at an in-app reminder list.
+Kalau ada yang bertanya “ini Maya?”, jawabannya: bentuk training sama dengan Maya SPEC-017 (spec, pack, skenario emas, eval), produknya beda. Maya memesan perjalanan korporat. TripSpec merencanakan itinerary liburan dan berhenti di daftar pengingat in-app.
 
 ---
 
-## 8–18 min — Generate the specs, then open the folder
+## 8–18 menit — Hasilkan spec, lalu buka foldernya
 
-Run `npm run help`. If step 4 is `not yet`, run:
+Jalankan `npm run help`. Kalau langkah 4 masih `not yet`, jalankan:
 
 ```bash
 npm run specs
 ```
 
-Say what the command is doing while it runs. It does not call the chat model to score replies. It reads `product/requirements.md`, runs the Agent On Rails chatbot-training orchestration (pin recorded in `.aor/aor-pin.json`), and publishes the draft into `specs/`. That tree is gitignored. The only tracked files under `specs/` are `.gitkeep` files.
+Jelaskan apa yang perintah itu lakukan selagi berjalan. Perintah ini tidak memanggil model chat untuk menilai balasan. Ia membaca `product/requirements.md`, menjalankan orkestrasi chatbot-training Agent On Rails (pin tercatat di `.aor/aor-pin.json`), lalu menerbitkan draf ke `specs/`. Pohon itu di-gitignore. Satu-satunya file yang terlacak di `specs/` adalah `.gitkeep`.
 
-When it finishes, open the folder. Do not claim success from the pin alone.
+Setelah selesai, buka foldernya. Jangan klaim sukses hanya dari pin.
 
-| Open this | What you say |
+| Buka ini | Apa yang diucapkan |
 | --- | --- |
-| `specs/product/` | Who the product is. Generated this run, not committed. |
-| `specs/requirements/` | The requirement specs (`SD-…`). This is the persisted spec. |
-| `specs/training/` | Scenarios and the eval checklist shape. Not the score. The score is the next command. |
-| `contracts/vibe.md` | Paste-ready vibe. In git. `npm run contracts` reads this. |
-| `contracts/packs/tripspec-nl.baseline.json` | What Ollama is told, and what `npm run train` scores. AOR writes it. Not in git. Version `2026-09-19.4`. |
+| `specs/product/` | Siapa produknya. Dihasilkan di run ini, tidak di-commit. |
+| `specs/requirements/` | Spec persyaratan (`SD-…`). Inilah spec yang tersimpan. |
+| `specs/training/` | Bentuk skenario dan daftar periksa eval. Bukan skornya. Skornya perintah berikutnya. |
+| `contracts/vibe.md` | Vibe siap tempel. Ada di git. `npm run contracts` membaca ini. |
+| `contracts/packs/tripspec-nl.baseline.json` | Apa yang diberitahu ke Ollama, dan apa yang dinilai `npm run train`. Ditulis AOR. Tidak di git. Versi `2026-09-19.4`. |
 
-Read three hard rules out loud, from `modules.reply_rules.hard_rules`:
+Bacakan tiga aturan keras, dari `modules.reply_rules.hard_rules`:
 
-- Never display a price. Not even if the traveler stated one.
-- The itinerary comes from the guide: summary, areas, season, visa, then the days.
-- Three flights, each airline + number + times. Stay names only after a pick. No rate.
+- Jangan pernah menampilkan harga. Bahkan kalau traveler yang menuliskannya.
+- Itinerary datang dari panduan: ringkasan, area, musim, visa, lalu hari-harinya.
+- Tiga penerbangan, masing-masing maskapai + nomor + jam. Nama penginapan hanya setelah dipilih. Tanpa tarif.
 
-Tools are the catalog in the pack, `modules.tools.catalog`. Regenerating specs writes one markdown per tool into `specs/tools/`. A chip under the chat reply opens that file in the editor. The model does not read the markdown. It sees the catalog description.
+Alat ada di katalog pack, `modules.tools.catalog`. Menghasilkan ulang spec menulis satu markdown per alat ke `specs/tools/`. Chip di bawah balasan chat membuka file itu di editor. Model tidak membaca markdown. Model melihat deskripsi katalog.
 
-| Tool | When | What the model is allowed to see |
+| Alat | Kapan | Apa yang boleh dilihat model |
 | --- | --- | --- |
-| `get_destination_guide` | A country or city is named | Summary, areas, season, visa, days |
-| `search_flights` | Origin, destination, and dates are known | Airline, flight number, times. No fare. |
-| `search_hotels` | After a pick, or “hotel” | Name and area. No nightly rate. |
-| `plan_notifications` | “Kunci” or “ingatkan” | In-app titles and offsets |
+| `get_destination_guide` | Kalimat terakhir menyebut negara atau kota. Bukan di giliran berikutnya yang hanya mengisi asal, tanggal, atau jumlah orang. | Ringkasan, area, musim, visa, hari |
+| `search_flights` | Asal, tujuan, dan tanggal sudah diketahui. `besok`, `lusa`, dan `hari ini` dihitung. | Maskapai, nomor penerbangan, jam, dan tanggal itu. Tanpa tarif. |
+| `search_hotels` | Setelah memilih, atau ada kata “hotel” | Nama dan area. Tanpa tarif malam. |
+| `plan_notifications` | “Kunci” atau “ingatkan” | Judul dan jarak waktu in-app. Jangan tanya slot lagi. |
 
-`src/agent/compose.ts` builds the system prompt from the pack, plus — only in the chatbot — the train report. It does not read `specs/requirements/`. The generated specs are what the room opens. Editing `specs/tools/` does not change the next reply. Change the catalog, regenerate, then re-run train.
+`src/agent/compose.ts` membangun prompt sistem dari pack, plus — hanya di chatbot — laporan train. Ia tidak membaca `specs/requirements/`. Spec yang dihasilkan adalah yang dibuka ruangan. Mengedit `specs/tools/` tidak mengubah balasan berikutnya. Ubah katalog, hasilkan ulang, lalu jalankan train lagi.
+
+```mermaid
+flowchart LR
+  vibe[contracts/vibe.md] --> pack[pack]
+  pack --> train[npm run train]
+  train --> laporan[latest.md]
+  req[product/requirements.md] --> folder[specs/]
+  pack --> chat[chat :3000]
+  laporan --> chat
+  chat --> ollama[Ollama]
+```
 
 ---
 
-## 18–36 min — Train, then read the persisted result
+## 18–36 menit — Train, lalu baca hasil yang tersimpan
 
 ```bash
 npm run train
 ```
 
-Weights stay put. The script boxes each scenario. Yellow is the wait. Green is PASS. Red is FAIL.
+Bobot tetap. Skrip membungkus tiap skenario. Kuning adalah menunggu. Hijau PASS. Merah FAIL.
 
-Under the hood, for each of S1–S5:
+Di balik layar, untuk masing-masing S1–S6:
 
-1. Forced tools read the inventory locally. No HTTP.
-2. `compose.ts` builds the system prompt from the pack and that JSON. The previous `latest.md` is not included.
-3. `POST http://127.0.0.1:11434/v1/chat/completions`, model `qwen3.5:latest`, temperature 0.3, stream off. A quiet stretch is the token loop, not a hang, and not training.
-4. Judges in `src/eval/judges.ts` score the text. No second model.
-5. A price in the reply (`Rp`, `juta`, `rb`) fails `grounding`. The template that replaces an ungrounded reply also has no prices.
+1. Alat paksa membaca inventaris secara lokal. Tanpa HTTP.
+2. `compose.ts` membangun prompt sistem dari pack dan JSON itu. `latest.md` sebelumnya tidak ikut.
+3. `POST http://127.0.0.1:11434/v1/chat/completions`, model `qwen3.5:latest`, temperatur 0.3, stream mati. Keheningan adalah putaran token, bukan macet, dan bukan training.
+4. Juri di `src/eval/judges.ts` menilai teks. Tidak ada model kedua.
+5. Harga di balasan (`Rp`, `juta`, `rb`) menggagalkan `grounding`. Templat yang mengganti balasan tidak berdasar juga tanpa harga.
 
-After S5 the same text is written twice:
+Setelah S6 teks yang sama ditulis dua kali:
 
-- `specs/training/results/<utc-stamp>.md`
+- `specs/training/results/<cap-waktu-utc>.md`
 - `specs/training/results/latest.md`
 
-Both are gitignored. `npm run help` reads the pack version inside `latest.md`. If it is not `2026-09-19.4`, step 3 stays `not yet`.
+Keduanya di-gitignore. `npm run help` membandingkan versi pack di dalam `latest.md` dengan pack di disk. Kalau beda, train tetap `not yet`. Pack demo ini `2026-09-19.4`. Laporan `@2026-09-19.1` adalah perencana lama yang masih menyebut harga.
 
-Pass bar, say it: S4 must pass, and at least 4 of 5. A green bar can still hide a red scenario. Read that scenario before you tell the room the planner is trained.
+Bilah lulus, ucapkan: S4 dan S6 wajib lulus, dan sedikitnya 5 dari 6. Bilah hijau tetap bisa menyembunyikan skenario merah. Baca skenario itu sebelum bilang ke ruangan bahwa perencana sudah terlatih.
 
-### Outcome you are aiming at
+### Hasil yang dituju
 
-These are the replies the pack’s few-shot and the mock gate already accept. A live run should land on the same shape. If it does not, the report is the evidence, and the fix is the pack, then `npm run train` again.
+Satu halaman baru. Jangan muat ulang di tengah. Gelembung kedua tidak boleh menyalin gelembung pertama.
 
-**S1 — “Mau ke Jepang.”** Tokyo, Shinjuku (and the other areas), Hari 1 and Hari 2, visa note from the guide, one question: where they depart. No price.
+**S1 — “Mau ke Jepang.”** Alat: `get_destination_guide` saja. Tokyo, Shinjuku, Asakusa, Shibuya, catatan musim, catatan visa, Hari 1 dan Hari 2, dan satu pertanyaan: dari mana berangkat, kapan, atau berapa orang. Tanpa harga.
 
-**S2 — “Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang.”** The Bali days (south coast, Ubud, Sanur), the visa line that is in the guide, then:
+**S6 — “berangkat dari Jakarta, besok, saya dan istri aja.”** Alat: `search_flights` saja. Alat panduan tidak jalan. `besok` adalah hari kalender berikutnya. Balasan menyebut Jakarta, besok, dan 2 orang, dan tidak dibuka dengan “Kalau kamu bilang Jepang”. Lalu, jam saja:
 
-- QZ-751 AirAsia, times only
-- GA-404 Garuda Indonesia, times only
-- JT-39 Lion Air, times only
+- JL-720 Japan Airlines 22:30–07:40
+- GA-880 Garuda Indonesia 23:55–09:10
+- QZ-202 AirAsia 21:15–06:50
 
-No `Rp`. Do not ask where they depart. Jakarta is already in the message.
+Jangan minta tanggal spesifik. S6 wajib.
 
-**S3 — “Yang nomor 2, sekalian hotel di Bali.”** GA-404 stays the chosen flight. Stays are names and areas: Kuta Beach Inn, Ubud Rice Lodge, Sanur Coast Hotel. No nightly rate.
+**S3 — “Yang nomor 2, sekalian hotel.”** Alat: `search_hotels`. Di utas Jepang ini namanya Shinjuku Base Hotel (Shinjuku), Asakusa Lane Inn (Asakusa), Shibuya Cross Hotel (Shibuya). Tanpa tarif malam. Kalimat S3 yang dinilai menambah “di Bali” dan mengharapkan Kuta Beach Inn, Ubud Rice Lodge, dan Sanur Coast Hotel. Aturan sama, kota lain.
 
-**S4 — “Ada tiket Garuda jam 3 pagi…?”** That flight is not in the data. The reply says so and does not quote a fare. S4 is required. A list of other flights is not, by itself, a refusal.
+**S4 — “Ada tiket Garuda jam 3 pagi harga 900rb?”** Penerbangan itu tidak ada di data. Balasan mengatakannya dan tidak mengutip tarif. S4 wajib. Daftar penerbangan lain, dengan sendirinya, bukan penolakan.
 
-**S5 — “Kunci opsi 2 dan ingatkan aku sebelum berangkat.”** The lock line has no price. Then:
+**S5 — “Kunci opsi 2 dan ingatkan aku sebelum berangkat.”** Alat: `plan_notifications`. Baris kunci tanpa harga. Jangan tanya asal, tanggal, atau jumlah orang lagi. Lalu:
 
 - 14 hari: Cek dokumen perjalanan
 - 7 hari: Kunci penerbangan dan hotel
 - 1 hari: Pengingat berangkat
 
-The reply says `in-app`. No other channel.
+Balasan menyebut `in-app`. Tidak ada saluran lain.
+
+**S2 — “Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang.”** Dinilai di gilirannya sendiri, bukan setelah S1. Buka halaman baru kalau ditunjukkan. Alat: panduan dan `search_flights`. Hari-hari Bali (pantai selatan, Ubud, Sanur), baris visa yang ada di panduan, lalu QZ-751, GA-404, dan JT-39 dengan jam saja. Tanpa `Rp`. Jangan tanya dari mana berangkat. Jakarta sudah ada di pesan.
 
 ---
 
-## 36–46 min — The chatbot Ollama actually serves
+## 36–46 menit — Chatbot yang benar-benar dilayani Ollama
 
-Leave the train terminal. In another:
+Tinggalkan terminal train. Di terminal lain:
 
 ```bash
 npm run demo
 ```
 
-That regenerates `specs/` (step 2 again) and starts the UI. Open http://localhost:3000.
+Itu menghasilkan ulang `specs/` lalu menyalakan UI. Buka http://localhost:3000.
 
-What the browser sends is `POST /api/chat`. What that route sends to Ollama is one system prompt built from two persisted things:
+Yang dikirim browser adalah `POST /api/chat`. Yang dikirim rute itu ke Ollama adalah satu prompt sistem dari dua hal yang tersimpan:
 
-1. The pack `tripspec-nl@2026-09-19.4` (generated from `contracts/vibe.md`).
-2. The body of `specs/training/results/latest.md`, cut before the chatbot checklist. The prompt tells the model to imitate PASS replies and not to repeat a FAIL pattern.
+1. Pack `tripspec-nl@2026-09-19.4` (dihasilkan dari `contracts/vibe.md`).
+2. Isi `specs/training/results/latest.md`, dipotong sebelum daftar periksa chatbot. Prompt menyuruh model meniru balasan PASS yang cocok dengan giliran ini, dan tidak menempelkan lagi balasan PASS yang lebih awal. Pola FAIL tidak diulang.
 
-If `latest.md` is missing, the route returns an error and the bubble says to run `npm run train`. That is deliberate. An untrained chat is not part of the demo.
+Kalau `latest.md` tidak ada, rute mengembalikan galat dan gelembung menyuruh jalankan `npm run train`. Itu disengaja. Chat yang belum dilatih bukan bagian demo.
 
-The footer should show `qwen3.5:latest`, the pack version, and `specs/training/results/latest.md`. `template fallback` means the bubble is the template, not the model’s own sentence. Tool names under a bubble are local inventory reads.
+Footer harus menampilkan `qwen3.5:latest`, versi pack, dan `specs/training/results/latest.md`. `template fallback` berarti gelembung adalah templat, bukan kalimat model sendiri. Nama alat di bawah gelembung adalah pembacaan inventaris lokal.
 
-Exercise the outcome, in order, on a fresh page:
+Latih hasilnya di halaman baru, berurutan. Jangan lewatkan S6. Itulah giliran yang dulu mencetak ulang panduan Jepang.
 
-| Chip or sentence | You should see |
-| --- | --- |
-| Mau ke Jepang | Tokyo from the guide, Hari 1 and Hari 2, one question, no price |
-| Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang | Itinerary, then the three flights, times only |
-| Yang nomor 2, sekalian hotel di Bali | Stay names and areas, no rate |
-| Ada tiket Garuda jam 3 pagi harga 900rb? | Refusal, and still no price |
-| Kunci opsi 2 dan ingatkan aku sebelum berangkat | Three in-app titles, no price |
+| Urutan | Kalimat | Yang harus terlihat |
+| --- | --- | --- |
+| S1 | Mau ke Jepang | Tokyo dari panduan, Hari 1 dan Hari 2, satu pertanyaan, tanpa harga. Chip alat: `get_destination_guide`. |
+| S6 | berangkat dari Jakarta, besok, saya dan istri aja | Jakarta, besok, 2 orang, lalu JL-720, GA-880, QZ-202. Paragraf pertama tidak diulang. Tidak ada pertanyaan tanggal baru. Chip alat: `search_flights` saja. |
+| S3 | Yang nomor 2, sekalian hotel | Nama dan area penginapan untuk kota yang sudah ada di utas. Tanpa tarif. |
+| S4 | Ada tiket Garuda jam 3 pagi harga 900rb? | Penolakan, dan tetap tanpa harga. |
+| S5 | Kunci opsi 2 dan ingatkan aku sebelum berangkat | Tiga judul in-app, tanpa harga, tanpa pertanyaan slot baru. |
+| S2 | Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang | Halaman baru. Hari-hari Bali, lalu QZ-751, GA-404, JT-39, jam saja. |
 
-A green train bar does not guarantee these bubbles. Read them. The report the model was told to imitate is the file in the footer.
+Bilah train hijau tidak menjamin gelembung ini. Bacalah. Laporan yang disuruh ditiru model adalah file di footer.
 
 ---
 
-## 46–50 min — Change the plan without touching weights
+## 46–50 menit — Ubah rencana tanpa menyentuh bobot
 
-If you have time, do this live. If you do not, describe it and stop.
+Kalau sempat, lakukan langsung. Kalau tidak, jelaskan lalu berhenti.
 
-1. Change Bali’s Hari 2 title in `src/inventory/mock-data.ts`, or one reminder title.
-2. If the wording is also a hard rule or a few-shot, change the pack and bump `version`.
-3. `npm run train` again. `npm run help` stays on step 3 until the new `latest.md` names the new version.
-4. Reload the chat. The footer’s report path is the same file. The text inside it moved. The GGUF did not.
+1. Ubah judul Hari 2 Bali di `src/inventory/mock-data.ts`, atau satu judul pengingat.
+2. Kalau susunan kata itu juga aturan keras atau few-shot, ubah pack dan naikkan `version`.
+3. `npm run train` lagi. `npm run help` tetap di langkah train sampai `latest.md` yang baru menyebut versi baru.
+4. Muat ulang chat. Path laporan di footer file yang sama. Teks di dalamnya yang bergeser. GGUF tidak.
 
-Close on what this demo will not do:
+Tutup dengan apa yang demo ini tidak lakukan:
 
-- No fares and no budget figures, even when the traveler types one.
-- No booking, payment, or ticket.
-- No live weather and no visa decision. The visa lines are notes in the guide. Japan’s note says the guide does not issue a visa.
-- No email, WhatsApp, or SMS. The channel is in-app.
-- No new model file. Ollama serves `qwen3.5:latest` with the pack and the persisted train report.
+- Tidak ada tarif dan tidak ada angka budget, bahkan saat traveler mengetiknya.
+- Tidak ada pemesanan, pembayaran, atau tiket.
+- Tidak ada cuaca langsung dan tidak ada keputusan visa. Baris visa adalah catatan di panduan. Catatan Jepang mengatakan panduan tidak menerbitkan visa.
+- Tidak ada email, WhatsApp, atau SMS. Salurannya in-app.
+- Tidak ada file model baru. Ollama melayani `qwen3.5:latest` dengan pack dan laporan train yang tersimpan.
 
-Commands to leave on the last slide:
+Perintah untuk ditinggal di slide terakhir:
 
 ```bash
-npm run help        # status beside each step, and the one command to run next
+npm run help        # status tiap langkah, dan satu perintah berikutnya
 npm run pull        # qwen3.5:latest
-npm run strap       # copy Agent On Rails into vendor/aor
-npm run contracts   # contracts/vibe.md → pack and capability schema
-npm run specs       # persist specs/requirements and specs/product
-npm run train       # persist specs/training/results/latest.md
-npm run demo        # chat on :3000, served from that report
+npm run strap       # salin Agent On Rails ke vendor/aor
+npm run contracts   # contracts/vibe.md → pack dan skema capability
+npm run specs       # simpan specs/requirements dan specs/product
+npm run train       # simpan specs/training/results/latest.md
+npm run demo        # chat di :3000, dilayani dari laporan itu
 ```
 
 Repo: https://github.com/iman-suherman/sdd-travel-planner
