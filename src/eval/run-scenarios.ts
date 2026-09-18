@@ -37,12 +37,11 @@ const SCENARIOS: Scenario[] = [
   },
   {
     id: "S2",
-    title: "Full slots → day plan + 3 flights",
+    title: "Itinerary plus 3 flights, no prices",
     turns: [
       {
         role: "user",
-        content:
-          "Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 8 juta, 2 orang",
+        content: "Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang",
       },
     ],
     forceTools: [
@@ -54,11 +53,11 @@ const SCENARIOS: Scenario[] = [
     ],
     judge: { expectGuide: true, expectDayPlan: true, expectThreeOptions: true },
     mockReply:
-      "Bali, 12–15 Oktober, 2 orang, dari Jakarta. Warga Indonesia tidak butuh visa ke Bali.\n\nHari 1: Tiba dan pantai selatan (Kuta atau Seminyak).\nHari 2: Ubud.\nHari 3: Sanur lalu pulang.\n\n3 opsi dari data:\n1. **QZ-751** 06:30 — Rp 890.000\n2. **GA-404** 08:15 — Rp 1.250.000\n3. **JT-39** 14:40 — Rp 760.000\n\nPilih 1/2/3?",
+      "Itinerary Bali, 12–15 Oktober, 2 orang, dari Jakarta. Warga Indonesia tidak butuh visa ke Bali.\n\nHari 1: Tiba dan pantai selatan (Kuta atau Seminyak).\nHari 2: Ubud.\nHari 3: Sanur lalu pulang.\n\n3 opsi terbang, tanpa harga:\n1. **QZ-751** AirAsia 06:30–09:25\n2. **GA-404** Garuda Indonesia 08:15–11:05\n3. **JT-39** Lion Air 14:40–17:30\n\nPilih 1/2/3?",
   },
   {
     id: "S3",
-    title: "After pick, hotels from data",
+    title: "Stay names inside the itinerary",
     turns: [
       {
         role: "assistant",
@@ -75,11 +74,11 @@ const SCENARIOS: Scenario[] = [
     ],
     judge: { expectHotels: true, expectThreeOptions: true },
     mockReply:
-      "Opsi 2 **GA-404** terkunci. Hotel dari data, yang lebih murah dulu:\n1. **Kuta Beach Inn** (Kuta) — Rp 450.000/malam\n2. **Ubud Rice Lodge** (Ubud) — Rp 520.000/malam\n3. **Sanur Coast Hotel** (Sanur) — Rp 590.000/malam\n\nPilih 1/2/3?",
+      "Opsi 2 **GA-404** terkunci untuk itinerary. Menginap, tanpa tarif:\n1. **Kuta Beach Inn** (Kuta)\n2. **Ubud Rice Lodge** (Ubud)\n3. **Sanur Coast Hotel** (Sanur)\n\nPilih 1/2/3?",
   },
   {
     id: "S4",
-    title: "Refuse invent missing price",
+    title: "Refuse a flight that is not in the list",
     turns: [
       { role: "user", content: "Ada tiket Garuda jam 3 pagi harga 900rb?" },
     ],
@@ -91,7 +90,7 @@ const SCENARIOS: Scenario[] = [
     ],
     judge: { expectRefuseInvent: true },
     mockReply:
-      "Di data aku belum ada Garuda jam 03:00 harga 900rb. Mau aku list 3 opsi yang tersedia aja?",
+      "Di data aku belum ada Garuda jam 03:00. Tidak ada harga di rencana ini. Mau aku list 3 opsi terbang yang ada?",
   },
   {
     id: "S5",
@@ -171,22 +170,21 @@ const AUDIENCE: Record<string, { waiting: string; want: string }> = {
   },
   S2: {
     waiting:
-      "Tools first: Bali guide + search_flights (QZ-751, GA-404, JT-39 are already in the prompt). Then one chat call.",
-    want: "Day outline from the guide, then exactly 3 numbered flights with those prices. Do not ask where they depart — Jakarta is already in the message.",
+      "Tools first: Bali guide + search_flights. The JSON has airline, flight number, and times. No fare is sent to the model.",
+    want: "Itinerary from the guide (Hari 1 and Hari 2), then exactly 3 flights with no price. Do not ask where they depart.",
   },
   S3: {
-    waiting: "Tools first: search_hotels for Bali, cheapest three. Then one chat call.",
-    want: "Name the locked flight and list hotel names and rates from the tool only.",
+    waiting: "Tools first: search_hotels for Bali. Names and areas only.",
+    want: "Name the locked flight and list stay names and areas. No nightly rate.",
   },
   S4: {
     waiting:
-      "Tools first: search_flights, so a real list exists. The 03:00 / 900rb fare is not in it. Then one chat call.",
-    want: "Say that fare is not in the data. Do not confirm GA-712 or Rp 900.000.",
+      "Tools first: search_flights, so a real list exists. The 03:00 Garuda is not in it.",
+    want: "Say that flight is not in the data. Do not confirm it. Do not write a price.",
   },
   S5: {
-    waiting:
-      "Tools first: plan_notifications only. That JSON has reminder titles and no prices. Then one chat call.",
-    want: "List the in-app reminders (Cek dokumen perjalanan, Kunci penerbangan dan hotel, Pengingat berangkat). Do not add an Rp amount — it is not in this turn's JSON.",
+    waiting: "Tools first: plan_notifications only. Titles and in-app. No fares.",
+    want: "List the in-app reminders. Do not add a price on the lock line.",
   },
 };
 
@@ -199,36 +197,35 @@ const CHAT_CHECK = [
   "npm run demo",
   "```",
   "",
-  "Open http://localhost:3000. Under the composer the footer should show `qwen3.5:latest` and the same pack version as the header above (`tripspec-nl@2026-09-19.1` unless you bumped it). If the footer says `template fallback`, the bubble is the canned template, not the model’s own sentence.",
-  "Tool names under a bubble are local inventory reads. They are not a second HTTP call. The only model call is still `POST /v1/chat/completions`.",
-  "Refresh the page between checks. One long thread mixes history, and the UI picks tools from the latest sentence plus that history.",
+  "Open http://localhost:3000. Under the composer the footer should show `qwen3.5:latest` and pack `tripspec-nl@2026-09-19.2`. The chatbot also loads `specs/training/results/latest.md`. If the footer says `template fallback`, the bubble is the template.",
+  "The end of a good thread is an itinerary: guide details, numbered days, then flight options with no price.",
   "",
-  "- **S1.** Click `Mau ke Jepang`. Expect Tokyo, an area from the guide (Shinjuku), Hari 1 and Hari 2, and one question. No `Rp`.",
-  "- **S2.** Click `Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 8 juta, 2 orang`. Expect a Bali day outline, then exactly three flights: QZ-751 Rp 890.000, GA-404 Rp 1.250.000, JT-39 Rp 760.000. It should not ask where you depart.",
-  "- **S3.** Refresh, run the S2 chip, then type `Yang nomor 2, sekalian hotel di Bali`. Expect Kuta Beach Inn, Ubud Rice Lodge, Sanur Coast Hotel and those rates. The chip `Yang nomor 2, sekalian hotel` alone still searches Bali (the UI defaults the city), but it has no locked flight in the thread.",
-  "- **S4.** Not a chip. Refresh and type `Ada tiket Garuda jam 3 pagi harga 900rb?`. Expect a refusal: no GA-712, no Rp 900.000. Train forces `search_flights` on this sentence so the real list is in the prompt. The chatbot does not: that sentence has no Jakarta and no date, and the UI skips flights when it sees `900rb` or `jam 3 pagi`. A bubble that only lists the three real fares, with `template fallback` in the footer, is the weak S4 pass — it did not refuse.",
-  "- **S5.** Refresh and click `Kunci opsi 2 dan ingatkan aku sebelum berangkat`. Expect Cek dokumen perjalanan, Kunci penerbangan dan hotel, Pengingat berangkat, and the words `in-app`. No `Rp`. A price here is the same grounding fail as train, even when the titles are right. The chip does not send a depart date; train sends `12 Oktober`. The titles are the same either way.",
+  "- **S1.** Click `Mau ke Jepang`. Expect Tokyo, Shinjuku, Hari 1 and Hari 2, and one question. No price.",
+  "- **S2.** Click `Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang`. Expect the Bali itinerary, then QZ-751, GA-404, and JT-39 with times only. No Rp.",
+  "- **S3.** Run S2, then type `Yang nomor 2, sekalian hotel di Bali`. Expect stay names and areas. No nightly rate.",
+  "- **S4.** Type `Ada tiket Garuda jam 3 pagi harga 900rb?`. Expect a refusal of that flight and no price in the reply.",
+  "- **S5.** Click `Kunci opsi 2 dan ingatkan aku sebelum berangkat`. Expect the three in-app titles. No price.",
   "",
   "A green pass bar does not mean these bubbles will match. Read the reply.",
 ];
 
 const FIX: Record<string, string> = {
   "option-count":
-    "Edit contracts/packs/tripspec-nl.baseline.json, not the model. If this turn already has flight facts, do not ask origin again. End with exactly 3 numbered lines: flightNo, time, priceLabel. Do not invent a Hari 4. Bump the pack version, then npm run train again.",
+    "Edit contracts/packs/tripspec-nl.baseline.json. If flight facts are already in this turn, print exactly 3 numbered flights: airline, flightNo, depart and arrive time. No price. Do not invent a Hari 4.",
   notifications:
-    "The reminder tool already returned the three titles. The reply must include at least two of them and the words in-app. Add a hard rule: if plan_notifications facts are in this turn, list every title and do not ask for slots again. Add a few-shot for “Kunci opsi 2 dan ingatkan aku”. Re-run npm run train.",
+    "The reminder tool already returned the three titles. The reply must include at least two of them and the words in-app. No price on the lock line.",
   grounding:
-    "A price in the reply is not in this turn's tool JSON. On S5 only plan_notifications runs, so Rp 1.250.000 is ungrounded even though it is the real GA-404 fare. Remove Rp from the lock few-shot. Hard rule: no fare on a reminder reply unless search_flights facts are in the same turn. Re-run npm run train.",
+    "The plan must not display a price. Remove Rp, juta, and rb from the few-shot and the template. Re-run npm run train.",
   "refuse-invent":
-    "SPEC-004: name the missing fare and refuse it. Do not confirm 03:00 or 900rb. A list of other flights is not a refusal. Tighten the few-shot, then npm run train.",
+    "Say the 03:00 flight is not in the data. Do not confirm it and do not quote a fare.",
   guide:
-    "The reply skipped the guide's city or first area. SPEC-001: explain the place from get_destination_guide before asking anything else.",
+    "Explain the guide city, first area, and the common notes (summary, visa) before asking anything else.",
   "day-plan":
-    "The reply needs Hari 1 and Hari 2, copied from the guide. Do not add days the guide does not have.",
+    "The itinerary needs Hari 1 and Hari 2 from the guide. Do not add days the guide does not have.",
   clarify:
-    "After the explanation, ask one missing slot (origin, then dates, budget, travelers). One question, not a package.",
+    "After the explanation, ask one missing slot: origin, dates, or travelers. Do not ask for budget.",
   hotels:
-    "Hotel names must come from search_hotels. Do not invent a property, and do not skip the list after the user asked for hotels.",
+    "Stay names and areas must come from search_hotels. No nightly rate.",
   bahasa:
     "SPEC-002: stay Bahasa-first. City and airline names may stay English.",
   "no-filler":

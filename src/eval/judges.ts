@@ -122,38 +122,16 @@ export function judgeGrounding(
       detail: "No tool facts this turn — skip price ⊆ check",
     };
   }
-  const blob = JSON.stringify(toolResults);
-  const prices = reply.match(/Rp\s*[\d.]+/gi) ?? [];
-  if (!prices.length) {
+  const prices = reply.match(/Rp\s*[\d.]|\b\d+(?:[.,]\d+)?\s*(?:rb|ribu|juta)\b/gi) ?? [];
+  if (prices.length) {
     return {
       name: "grounding",
-      pass: true,
-      detail: "No prices in reply",
+      pass: false,
+      detail: `Do not display a price: ${prices.join(", ")}`,
     };
   }
   const bad: string[] = [];
-  for (const p of prices) {
-    const digits = p.replace(/[^\d]/g, "");
-    if (!digits) continue;
-    if (!blob.replace(/[^\d]/g, "").includes(digits) && !blob.includes(p.replace(/\s/g, " "))) {
-      // also try formatted with dots
-      const withDots = Number(digits).toLocaleString("id-ID");
-      if (!blob.includes(withDots) && !blob.includes(digits)) {
-        bad.push(p);
-      }
-    }
-  }
-  // Hotel names
-  const hotelNames =
-    toolResults.flatMap(
-      (t) =>
-        ((t.facts.hotels as Array<{ name: string }>) ?? []).map((h) => h.name),
-    ) ?? [];
-  for (const name of [
-    "Hilton Imaginary",
-    "Fake Resort",
-    "Hotel Invented",
-  ]) {
+  for (const name of ["Hilton Imaginary", "Fake Resort", "Hotel Invented"]) {
     if (reply.includes(name)) bad.push(name);
   }
 
@@ -161,10 +139,7 @@ export function judgeGrounding(
   return {
     name: "grounding",
     pass,
-    detail: pass
-      ? `All ${prices.length} prices grounded` +
-        (hotelNames.length ? `; hotels available: ${hotelNames.join(", ")}` : "")
-      : `Ungrounded: ${bad.join(", ")}`,
+    detail: pass ? "No price in the reply" : `Ungrounded: ${bad.join(", ")}`,
   };
 }
 

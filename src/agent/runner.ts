@@ -52,60 +52,21 @@ function env(name: string, fallback: string): string {
   return process.env[name]?.trim() || fallback;
 }
 
-function extractPricesAndNames(text: string): string[] {
-  const found: string[] = [];
-  const priceRe = /Rp\s*[\d.]+(?:\.\d{3})*/gi;
-  for (const m of text.match(priceRe) ?? []) found.push(m.replace(/\s+/g, " "));
-  return found;
+function showsPrice(text: string): boolean {
+  return /Rp\s*[\d.]/i.test(text) || /\b\d+(?:[.,]\d+)?\s*(rb|ribu|juta)\b/i.test(text);
 }
 
-function factStrings(toolResults: ToolResult[]): Set<string> {
-  const s = new Set<string>();
-  for (const tr of toolResults) {
-    const raw = JSON.stringify(tr.facts);
-    for (const m of raw.match(/Rp\s*[\d.]+/gi) ?? []) {
-      s.add(m.replace(/\s+/g, " "));
-    }
-    for (const flight of (tr.facts.flights as Array<{ flightNo?: string; name?: string }>) ?? []) {
-      if (flight.flightNo) s.add(flight.flightNo);
-    }
-    for (const hotel of (tr.facts.hotels as Array<{ name?: string }>) ?? []) {
-      if (hotel.name) s.add(hotel.name);
-    }
-  }
-  return s;
-}
-
-function isUngrounded(reply: string, toolResults: ToolResult[]): boolean {
-  if (!toolResults.length) return false;
-  const allowed = factStrings(toolResults);
-  if (!allowed.size) return false;
-  const prices = extractPricesAndNames(reply);
-  if (!prices.length) return false;
-  // Normalize for comparison: strip dots in thousands
-  const norm = (p: string) => p.replace(/\s/g, "").toLowerCase();
-  const allowedNorm = new Set([...allowed].map(norm));
-  for (const p of prices) {
-    const n = norm(p);
-    let ok = false;
-    for (const a of allowedNorm) {
-      if (a.includes(n) || n.includes(a) || a.replace(/\./g, "") === n.replace(/\./g, "")) {
-        ok = true;
-        break;
-      }
-    }
-    if (!ok) return true;
-  }
-  return false;
+function isUngrounded(reply: string): boolean {
+  return showsPrice(reply);
 }
 
 const TOOL_MEANING: Record<string, string> = {
   get_destination_guide:
     "Local guide only. Jepang maps to Tokyo. Returns areas, day plan, visa note. No fare and no web search.",
   search_flights:
-    "Mock flights in src/inventory/mock-data.ts. Returns flight number, time, and price. Does not book.",
+    "Mock flights for the itinerary. Airline, flight number, and times. No fare. Does not book.",
   search_hotels:
-    "Mock hotels for that city. Returns name, area, and nightly rate. Does not book.",
+    "Places to stay after a pick. Name and area only. No nightly rate.",
   plan_notifications:
     "In-app reminders only (14 days, 7 days, 1 day). No email, WhatsApp, SMS, or push.",
 };
@@ -124,7 +85,7 @@ function previewSystem(content: string): string[] {
   const factAt = all.findIndex((line) => line.startsWith("GROUNDED FACTS"));
   if (factAt >= 0) {
     out.push(
-      "GROUNDED FACTS are this turn's inventory JSON. A price is allowed only if it appears here.",
+      "GROUNDED FACTS are this turn's guide and flight or stay names. Do not add a price.",
     );
     const facts = all.slice(factAt, factAt + 18);
     for (const line of facts) out.push(line.length > 160 ? `${line.slice(0, 160)}…` : line);
@@ -426,7 +387,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
   const preferTemplate =
     pack.modules.reply_rules.prefer_template_when_ungrounded !== false;
 
-  if ((!reply || isUngrounded(reply, toolResults)) && preferTemplate) {
+  if ((!reply || isUngrounded(reply)) && preferTemplate) {
     const lastFlights = toolResults
       .filter((t) => t.name === "search_flights")
       .at(-1);

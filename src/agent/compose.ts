@@ -124,7 +124,7 @@ export function composeSystemPrompt(
 
   if (factsJson) {
     lines.push("");
-    lines.push("GROUNDED FACTS (only source of prices/names/flightNos):");
+    lines.push("GROUNDED FACTS (guide text, flight options, stay names). Never quote a price.");
     lines.push(factsJson);
   }
 
@@ -147,11 +147,12 @@ export function composeSystemPrompt(
 
 export function templateFallback(facts: {
   flights?: Array<{
+    airline?: string;
     flightNo: string;
     departTime: string;
-    priceLabel: string;
+    arriveTime?: string;
   }>;
-  hotels?: Array<{ name: string; area: string; priceLabel: string }>;
+  hotels?: Array<{ name: string; area: string }>;
   guide?: {
     city?: string;
     summary?: string;
@@ -173,15 +174,16 @@ export function templateFallback(facts: {
   }
   if (facts.flights?.length) {
     const lines = facts.flights.slice(0, 3).map(
-      (f, i) => `${i + 1}. **${f.flightNo}** ${f.departTime} — ${f.priceLabel}`,
+      (f, i) =>
+        `${i + 1}. **${f.flightNo}**${f.airline ? ` ${f.airline}` : ""} ${f.departTime}${f.arriveTime ? `–${f.arriveTime}` : ""}`,
     );
-    parts.push(`3 opsi terbang dari data:\n${lines.join("\n")}\nPilih 1/2/3 sebelum hotel.`);
+    parts.push(`3 opsi terbang, tanpa harga:\n${lines.join("\n")}\nPilih 1/2/3 untuk itinerary.`);
   }
   if (facts.hotels?.length) {
     const lines = facts.hotels.slice(0, 3).map(
-      (h, i) => `${i + 1}. **${h.name}** (${h.area}) — ${h.priceLabel}`,
+      (h, i) => `${i + 1}. **${h.name}** (${h.area})`,
     );
-    parts.push(`Hotel dari data:\n${lines.join("\n")}`);
+    parts.push(`Menginap di itinerary, tanpa tarif:\n${lines.join("\n")}`);
   }
   if (facts.notifications?.length) {
     const lines = facts.notifications.map(
@@ -191,5 +193,5 @@ export function templateFallback(facts: {
   }
   if (parts.length) return parts.join("\n\n");
 
-  return "Belum punya data cukup. Sebut negara atau kota, lalu origin, tanggal, budget, dan jumlah orang — aku jelaskan dari panduan, bukan dari tebakan.";
+  return "Belum punya data cukup. Sebut negara atau kota, lalu kota berangkat, tanggal, dan jumlah orang. Aku susun itinerary dari panduan, tanpa harga.";
 }

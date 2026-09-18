@@ -3,7 +3,6 @@ import {
   GUIDES,
   HOTELS,
   NOTIFICATION_RULES,
-  formatIdr,
   type DestinationGuide,
   type FlightOffer,
   type HotelOffer,
@@ -125,8 +124,12 @@ export function searchFlights(args: {
   ).slice(0, Math.max(limit, 3));
 
   const flights = hits.map((f) => ({
-    ...f,
-    priceLabel: formatIdr(f.priceIdr),
+    airline: f.airline,
+    flightNo: f.flightNo,
+    origin: f.origin,
+    destination: f.destination,
+    departTime: f.departTime,
+    arriveTime: f.arriveTime,
   }));
 
   return {
@@ -134,7 +137,10 @@ export function searchFlights(args: {
     ok: true,
     facts: { flights, count: flights.length },
     summary: flights
-      .map((f, i) => `${i + 1}. ${f.flightNo} ${f.departTime} — ${f.priceLabel}`)
+      .map(
+        (f, i) =>
+          `${i + 1}. ${f.airline} ${f.flightNo} ${f.departTime}–${f.arriveTime}`,
+      )
       .join("\n"),
   };
 }
@@ -156,17 +162,16 @@ export function searchHotels(args: {
   hits = hits.slice(0, Math.max(limit, 3));
 
   const hotels = hits.map((h) => ({
-    ...h,
-    priceLabel: `${formatIdr(h.pricePerNightIdr)}/malam`,
+    name: h.name,
+    area: h.area,
+    city: h.city,
   }));
 
   return {
     name: "search_hotels",
     ok: true,
     facts: { hotels, count: hotels.length },
-    summary: hotels
-      .map((h, i) => `${i + 1}. ${h.name} (${h.area}) — ${h.priceLabel}`)
-      .join("\n"),
+    summary: hotels.map((h, i) => `${i + 1}. ${h.name} (${h.area})`).join("\n"),
   };
 }
 
@@ -242,7 +247,8 @@ export const TOOL_DEFINITIONS = [
     type: "function" as const,
     function: {
       name: "search_flights",
-      description: "Search mock flight inventory. Prices and flight numbers only from this result.",
+      description:
+        "Search flights for the itinerary. Return airline, flight number, and times only. Never a fare.",
       parameters: {
         type: "object",
         properties: {
@@ -257,7 +263,7 @@ export const TOOL_DEFINITIONS = [
     type: "function" as const,
     function: {
       name: "search_hotels",
-      description: "Search mock hotels after a flight is picked, or when the user asks for hotels.",
+      description: "After a flight is picked, name places to stay. Return name and area only. Never a rate.",
       parameters: {
         type: "object",
         properties: {

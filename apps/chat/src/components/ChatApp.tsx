@@ -11,7 +11,7 @@ type Msg = {
 
 const STARTERS = [
   "Mau ke Jepang",
-  "Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 8 juta, 2 orang",
+  "Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang",
   "Yang nomor 2, sekalian hotel",
   "Kunci opsi 2 dan ingatkan aku sebelum berangkat",
 ];
@@ -21,7 +21,7 @@ export function ChatApp() {
     {
       role: "assistant",
       content:
-        "Hai, aku **TripSpec**. Sebut negara atau kota — aku bahas panduannya, susun rencana harian, kasih opsi dari data, lalu jadwalkan pengingat in-app. Tidak ada harga yang aku karang.",
+        "Hai, aku **TripSpec**. Sebut negara atau kota. Aku susun itinerary liburan dari panduan, kasih opsi terbang tanpa harga, lalu pengingat in-app.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -110,7 +110,7 @@ export function ChatApp() {
         <p className={styles.eyebrow}>SDD teaching demo · Ollama</p>
         <h1 className={styles.brand}>TripSpec</h1>
         <p className={styles.tagline}>
-          Rencana trip lewat SPEC + eval — bukan fine-tuning.
+          Itinerary liburan dari panduan — bukan daftar harga.
         </p>
       </header>
 
