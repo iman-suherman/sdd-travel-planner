@@ -29,6 +29,53 @@ The model default is `qwen3.5:latest` (`OLLAMA_CHAT_MODEL`, pulled with `npm run
 
 ---
 
+## Under the hood — `npm run train`
+
+The lines in the terminal are this chain. Nothing here updates model weights.
+
+```text
+npm run train
+  └─ package.json  "train": "bash scripts/train.sh"
+       └─ scripts/train.sh
+            └─ npx tsx src/eval/run-scenarios.ts
+                 ├─ read contracts/packs/tripspec-nl.baseline.json
+                 ├─ GET  http://127.0.0.1:11434/api/tags     (2s) → live or mock
+                 └─ for S1, then S2, then S3, then S4, then S5:
+                      1. run forced tools locally (inventory JSON, no model)
+                      2. compose.ts builds the system prompt from the pack + that JSON
+                      3. POST /v1/chat/completions  model qwen3.5:latest
+                      4. src/eval/judges.ts scores the reply
+                      5. print "S2: PASS" or "S2: FAIL — …"   ← you see this immediately
+                 └─ write specs/training/results/<utc>.md and results/latest.md
+                 └─ exit 0 only if S4 passed and at least 4 of 5 passed
+```
+
+What each terminal line is:
+
+| Line you see | What just happened |
+| --- | --- |
+| `npm notice run … train` / `bash scripts/train.sh` | npm ran the `train` script. The shell only prints the reminder and calls tsx. |
+| `Edit SPECs / contracts/packs/…` | Not a check. A reminder that the next run uses whatever is already in those files. This command does not edit them. |
+| `npx tsx src/eval/run-scenarios.ts` | The actual program. One Node process, scenarios in order, not in parallel. |
+| `pack tripspec-nl@2026-09-19.1 — mode=live` | Pack loaded. `GET /api/tags` on `OLLAMA_BASE_URL` succeeded, so each scenario calls the model. If that GET fails, mode is `mock` and the canned replies are scored instead. `TRIPSPEC_EVAL_MODE=mock` or `live` skips the probe. |
+| `S1: PASS` then later `S2: FAIL — option-count: …` | That scenario’s Ollama call returned, judges finished, and the line was printed before the next scenario starts. A quiet gap of one or two minutes is the model generating, not a hang. S4 and S5 have not run yet if they are not on screen. |
+| `Wrote …/results/….md` | Only after S5. Same text is copied to `results/latest.md`. |
+| `Pass bar: PASS (4/5)` | S4’s judge passed and at least four scenarios passed. Exit code 0. S5 can still be FAIL. `FAIL` here means exit code 1: S4 failed, or fewer than four scenarios passed. |
+
+Inside one live scenario (`runAgent` in `src/agent/runner.ts`):
+
+1. **Tools first, on purpose.** S2 forces `get_destination_guide` and `search_flights`. Those functions read `src/inventory/mock-data.ts` and return JSON. The model is not asked to invent the list.
+2. **Prompt.** `composeSystemPrompt` turns the pack (preamble, hard rules, few-shots, invariants) plus that JSON into one system message. There is no other system prompt in code.
+3. **Model.** `POST {OLLAMA_BASE_URL}/v1/chat/completions` with `OLLAMA_CHAT_MODEL` (default `qwen3.5:latest`), temperature 0.3, and the tool definitions. If the model returns `tool_calls`, the runner executes them and loops at most twice.
+4. **Fallback.** If the reply is empty or contains an `Rp` amount that is not in the tool JSON, and the pack has `prefer_template_when_ungrounded: true`, the reply is replaced with `templateFallback`. The report then says `(template fallback)`. A reply that simply forgets to list three options is kept. That is why S2 can fail `option-count` with no fallback note.
+5. **Judges.** `runJudges` is local string checks. No second model. The FAIL text after the dash is the first failing judge’s detail (`option-count: Expected 3 options, found ~1`).
+
+S2’s judge counts numbered lines and `**bold**` names. “Found ~1” means the live reply did not look like three numbered options, even if a day plan was in the text. The fix is the pack (hard rule + few-shot that shows three numbered flights after the days), then the same command again. Do not change the GGUF to clear that line.
+
+`npm run eval:mock` is the same file with `TRIPSPEC_EVAL_MODE=mock`: steps 3 and 4 are skipped and the canned reply is judged. `npm run eval:live` forces step 3 even if you want to be sure. `npm run train:aor` is not in this chain.
+
+---
+
 ## How a run is scored
 
 `src/eval/run-scenarios.ts` walks S1–S5. For each one it may force tools so the facts are present even if the model never calls them. `src/eval/judges.ts` then checks the reply. A scenario passes only if every judge that applies to it passes.
@@ -179,7 +226,23 @@ npm run demo                 # UI on :3000, same pack and tools
 
 Environment: `OLLAMA_BASE_URL` default `http://127.0.0.1:11434`, `OLLAMA_CHAT_MODEL` default `qwen3.5:latest`, `AOR_CONTROL_PLANE` default `~/src/agent-on-rails/agent-on-rails-control-plane`.
 
-The chat UI forces the same tools from the latest user sentence (guide when a place is named, flights when origin and a date are both present, hotels on “hotel”, reminders on “kunci” / “ingatkan”). That is so a workshop laptop shows grounded facts even when tool-calling is flaky. The eval harness does the same with `forceTools`.
+The chat UI forces tools from the latest user sentence (guide when a place is named, flights when origin and a date are both present, hotels on “hotel”, reminders on “kunci” / “ingatkan”). That is so a workshop laptop shows grounded facts even when tool-calling is flaky. The eval harness does the same with `forceTools`. `npm run train` prints this checklist again after the pass bar.
+
+### Check S1–S5 in the chatbot
+
+`npm run train` does not open the UI. After it finishes, leave that terminal and run `npm run demo` in another. Browser: http://localhost:3000. The footer under the composer should show `qwen3.5:latest` and the same pack version the train header printed. `template fallback` in that footer means the bubble is the template, not the model’s own sentence. Names under a bubble are local inventory reads, not a second HTTP call.
+
+Refresh between checks so one thread does not mix tools.
+
+| Train | In the browser | What a matching reply looks like |
+| --- | --- | --- |
+| S1 | Chip `Mau ke Jepang` | Tokyo, an area (Shinjuku), Hari 1 and Hari 2, one question. No `Rp`. |
+| S2 | Chip `Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 8 juta, 2 orang` | Day outline, then QZ-751 / GA-404 / JT-39 at Rp 890.000, Rp 1.250.000, Rp 760.000. Does not ask origin. |
+| S3 | S2 first, then type `Yang nomor 2, sekalian hotel di Bali` | Kuta Beach Inn, Ubud Rice Lodge, Sanur Coast Hotel. The hotel chip alone still searches Bali, but the thread has no locked flight. |
+| S4 | Not a chip. Type `Ada tiket Garuda jam 3 pagi harga 900rb?` | Refusal. No GA-712, no Rp 900.000. Train injects `search_flights` here; the UI does not, because that sentence has no origin or date and the route skips flights on `900rb` / `jam 3 pagi`. |
+| S5 | Chip `Kunci opsi 2 dan ingatkan aku sebelum berangkat` | The three reminder titles and the words `in-app`. No `Rp`. The chip sends no depart date; train sends `12 Oktober`. Titles match either way. |
+
+A green pass bar does not mean these bubbles will match. Read the reply.
 
 ---
 
@@ -192,3 +255,55 @@ The chat UI forces the same tools from the latest user sentence (guide when a pl
 5. Re-run `npm run train`. S4 red means the pack is not ready, even if the other four passed.
 
 Changing `qwen3.5:latest` for a larger tag is allowed as an experiment. It is not the training step. The training step is the SPEC, the pack, and this gate.
+
+---
+
+## Live run — 19 Sep 2026, 07:32 AEST
+
+This is the run in the terminal: `npm run train:aor` finished, then `npm run train` with Ollama up.
+
+Report: `specs/training/results/2026-09-18T21-32-12.md`  
+Pack `tripspec-nl@2026-09-19.1` · mode **live** · model `qwen3.5:latest`  
+**S1 PASS, S2 PASS, S3 PASS, S4 PASS (template fallback), S5 FAIL.**  
+Pass bar **PASS (4/5)** because S4’s judge was green and the bar only needs 4 of 5. The script can exit 0 while S5 is still red. Do not treat that as “notify works”.
+
+`npm run train:aor` before it only refreshed drafts under `.aor/generated-control-plane/`. Those drafts did not change this score. The score is the pack plus the live model.
+
+### What passed
+
+S1 discussed Tokyo from the guide and asked where they depart. S2 wrote the Bali days and the three real fares (QZ-751, GA-404, JT-39). S3 locked option 2 and listed Kuta Beach Inn, Ubud Rice Lodge, and Sanur Coast Hotel. Those three are the behaviour you wanted from SPEC-001 and SPEC-003.
+
+### S4 is green for the wrong reason
+
+The note on the row is `ok (template fallback)`. The model’s own text was thrown away. The text that was scored is the flight list:
+
+```text
+3 opsi terbang dari data:
+1. QZ-751 06:30 — Rp 890.000
+2. GA-404 08:15 — Rp 1.250.000
+3. JT-39 14:40 — Rp 760.000
+```
+
+That list is grounded, so it is safe. It is not a refusal. The user asked for a 03:00 Garuda at 900rb. The reply never says “belum ada”. `refuse-invent` still passed because the fallback sentence contains “dari data”, and the judge treats that phrase as a refusal. The prices are real, so it did not invent 900rb either.
+
+**What to do.** Do not call S4 done. In SPEC-004 and the pack few-shot, the reply to a missing fare must say the fare is not in the data, then offer the real three. In `src/eval/judges.ts`, stop treating “dari data” alone as a refusal: require `belum ada` / `tidak ada` and reject a reply that never mentions the asked-for fare. Re-run `npm run eval:live` and read S4 before the fallback note.
+
+### S5 failed
+
+User: “Kunci opsi 2 dan ingatkan aku sebelum berangkat.”
+
+The harness had already called `plan_notifications`. The tool returned three titles: **Cek dokumen perjalanan**, **Kunci penerbangan dan hotel**, **Pengingat berangkat**, channel in-app.
+
+The model did not use them. It said it had no prior flight in this turn and asked again for origin, destination, date, budget, and travelers. It mentioned “pengingat in-app” as a promise, not as the schedule.
+
+The judge needs two of those titles in the reply, and the words `in-app`. Titles found: none. That is the only red judge. Bahasa, grounding, and no-filler all passed. A polite clarifying question is still a fail here, because SPEC-005 says a lock lists the tool schedule.
+
+Template fallback did not save it. Fallback runs when the reply is empty or contains a price that is not in the tool JSON. This reply has no price, so the runner kept it.
+
+**What to do, in this order.**
+
+1. Edit the pack, not the model. In `contracts/packs/tripspec-nl.baseline.json`, add a hard rule: if `plan_notifications` facts are in this turn, list every `title`, `when`, and `channel` from that JSON. Do not ask for slots again. Bump `version`.
+2. Add a few-shot whose user line is “Kunci opsi 2 dan ingatkan aku sebelum berangkat” and whose assistant line is the three reminders only. The bad example is the one that re-asks origin and dates.
+3. In `src/agent/runner.ts`, if the last tool is `plan_notifications` and the reply is missing those titles, use `templateFallback` with the notification list. Same idea as the price fallback you already trust on S4.
+4. `npm run train` again. S5 is green only when the reply contains at least two of the three titles and `in-app`. A pass bar of 4/5 with S5 red is not the notify step.
+

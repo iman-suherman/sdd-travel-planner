@@ -32,6 +32,8 @@ export type RunOptions = {
   /** Force tool use for demos / evals without relying on model tool-calling. */
   forceTools?: ToolCall[];
   maxToolRounds?: number;
+  /** Line-oriented trace for `npm run train`. Omitted by the chat UI. */
+  onTrace?: (line: string) => void;
 };
 
 export type RunResult = {
@@ -97,6 +99,7 @@ async function ollamaChat(
   baseUrl: string,
   apiKey: string | undefined,
   body: Record<string, unknown>,
+  onTrace?: (line: string) => void,
 ): Promise<{
   message?: ChatMessage & {
     tool_calls?: ChatMessage["tool_calls"];
@@ -109,19 +112,43 @@ async function ollamaChat(
   };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
+  const messages = (body.messages as ChatMessage[] | undefined) ?? [];
+  const tools = (body.tools as Array<{ function?: { name?: string } }> | undefined) ?? [];
+  onTrace?.(`   API  POST ${url}`);
+  onTrace?.(
+    `        model ${String(body.model)}  temperature ${String(body.temperature ?? "default")}`,
+  );
+  onTrace?.(
+    `        messages ${messages.length} (${messages.map((m) => m.role).join(", ") || "none"})`,
+  );
+  onTrace?.(
+    `        tools ${tools.map((t) => t.function?.name).filter(Boolean).join(", ") || "none"}`,
+  );
+  if (apiKey) onTrace?.("        auth Bearer (key not printed)");
+  onTrace?.("        waiting for Ollama…");
+
+  const started = Date.now();
   const res = await fetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
   });
+  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
   if (!res.ok) {
     const text = await res.text();
+    onTrace?.(`        ← HTTP ${res.status} in ${elapsed}s`);
     throw new Error(`Ollama chat failed (${res.status}): ${text.slice(0, 400)}`);
   }
-  return (await res.json()) as {
+  const data = (await res.json()) as {
     message?: ChatMessage;
     choices?: Array<{ message: ChatMessage }>;
   };
+  const msg = data.choices?.[0]?.message ?? data.message;
+  const calls = msg?.tool_calls?.map((t) => t.function.name).join(", ");
+  onTrace?.(
+    `        ← HTTP ${res.status} in ${elapsed}s  ${calls ? `tool_calls ${calls}` : `reply ${ (msg?.content ?? "").trim().length } chars`}`,
+  );
+  return data;
 }
 
 function assistantMessage(data: Awaited<ReturnType<typeof ollamaChat>>): ChatMessage {
@@ -136,13 +163,20 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
   const baseUrl = opts.baseUrl ?? env("OLLAMA_BASE_URL", "http://127.0.0.1:11434");
   const apiKey = opts.apiKey ?? process.env.OLLAMA_API_KEY;
   const maxToolRounds = opts.maxToolRounds ?? 2;
+  const trace = opts.onTrace;
 
   const toolResults: ToolResult[] = [];
 
   if (opts.forceTools?.length) {
+    trace?.("   Local tools (no HTTP, inventory in this repo):");
     for (const call of opts.forceTools) {
-      toolResults.push(runTool(call));
+      const result = runTool(call);
+      toolResults.push(result);
+      const arg = JSON.stringify(call.arguments);
+      trace?.(`        ${call.name} ${arg} → ${result.ok ? "ok" : "empty"}`);
     }
+  } else {
+    trace?.("   Local tools: none for this scenario.");
   }
 
   const factsPayload = toolResults.length
@@ -164,12 +198,18 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
 
   while (rounds <= maxToolRounds) {
     rounds += 1;
-    const data = await ollamaChat(baseUrl, apiKey, {
-      model,
-      messages,
-      tools: TOOL_DEFINITIONS,
-      temperature: 0.3,
-    });
+    trace?.(`   Chat round ${rounds}:`);
+    const data = await ollamaChat(
+      baseUrl,
+      apiKey,
+      {
+        model,
+        messages,
+        tools: TOOL_DEFINITIONS,
+        temperature: 0.3,
+      },
+      trace,
+    );
     const msg = assistantMessage(data);
 
     if (msg.tool_calls?.length) {
