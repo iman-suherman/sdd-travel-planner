@@ -1,0 +1,5 @@
+# Training results
+
+Run reports from `npm run train` land here as `YYYY-MM-DD-HHmmss.md`.
+
+Each report lists S1–S5 PASS/FAIL with judge notes.

@@ -1,0 +1,36 @@
+{
+  "name": "sdd-travel-planner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo travel-planner agent trained with Spec-Driven Development on Ollama. SPECs + golden scenarios + acceptance evals drive system prompts and tools — same pattern as Maya Travel AI, sized for a live workshop.",
+  "type": "module",
+  "scripts": {
+    "pull": "bash scripts/pull-model.sh",
+    "ollama:pull": "npm run pull",
+    "train": "bash scripts/train.sh",
+    "train:aor": "bash scripts/train-aor.sh",
+    "train:all": "npm run train:aor && npm run train",
+    "demo": "bash scripts/demo.sh",
+    "dev": "npm run demo",
+    "chat": "npm --prefix apps/chat run dev",
+    "build": "npm --prefix apps/chat run build",
+    "eval": "tsx src/eval/run-scenarios.ts",
+    "eval:mock": "TRIPSPEC_EVAL_MODE=mock tsx src/eval/run-scenarios.ts",
+    "eval:live": "TRIPSPEC_EVAL_MODE=live tsx src/eval/run-scenarios.ts"
+  },
+  "dependencies": {
+    "next": "15.5.25",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

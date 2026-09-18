@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+apps/chat/node_modules/
+apps/chat/.next/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS / IDE
+.DS_Store
+*.log
+.turbo/
+
+# AOR-generated drafts (regenerate with npm run train:aor)
+.aor/generated-control-plane/
+
+# Train results keep latest; ignore noisy stamps if desired — keep all for demo

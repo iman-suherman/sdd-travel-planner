@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tripspec.local/schemas/capability-pack.schema.json",
+  "title": "TripSpecCapabilityPack",
+  "type": "object",
+  "required": ["pack_id", "version", "status", "locked_invariants", "modules"],
+  "additionalProperties": false,
+  "properties": {
+    "pack_id": { "type": "string", "const": "tripspec-nl" },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[0-9]+$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["baseline", "draft", "sandbox", "live", "superseded"]
+    },
+    "parent_version": { "type": ["string", "null"] },
+    "spec_ref": { "type": "string" },
+    "locked_invariants": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "type": "string" }
+    },
+    "modules": {
+      "type": "object",
+      "required": ["persona", "reply_rules", "few_shot"],
+      "additionalProperties": false,
+      "properties": {
+        "persona": {
+          "type": "object",
+          "required": ["name", "voice", "languages", "address_fallback"],
+          "properties": {
+            "name": { "type": "string" },
+            "role": { "type": "string" },
+            "voice": { "type": "string" },
+            "languages": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "address_fallback": { "type": "string" }
+          }
+        },
+        "reply_rules": {
+          "type": "object",
+          "required": ["system_preamble", "hard_rules", "cta"],
+          "properties": {
+            "system_preamble": { "type": "string" },
+            "hard_rules": {
+              "type": "array",
+              "minItems": 3,
+              "items": { "type": "string" }
+            },
+            "cta": { "type": "string" },
+            "style": { "type": "string" },
+            "max_words": { "type": "integer" },
+            "prefer_template_when_ungrounded": { "type": "boolean" }
+          }
+        },
+        "few_shot": {
+          "type": "object",
+          "required": ["good", "bad"],
+          "properties": {
+            "good": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["user", "assistant"],
+                "properties": {
+                  "user": { "type": "string" },
+                  "assistant": { "type": "string" },
+                  "why": { "type": "string" }
+                }
+              }
+            },
+            "bad": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["user", "assistant"],
+                "properties": {
+                  "user": { "type": "string" },
+                  "assistant": { "type": "string" },
+                  "why": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "tools": {
+          "type": "object",
+          "properties": {
+            "allowed": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "eval": {
+      "type": "object",
+      "properties": {
+        "required_scenarios": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "last_result": {
+          "type": "string",
+          "enum": ["pass", "fail", "pending", "skipped"]
+        }
+      }
+    }
+  }
+}
