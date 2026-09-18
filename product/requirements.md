@@ -6,13 +6,13 @@ A holiday planner. The traveler names a country or a city. TripSpec writes an it
 
 ## Must-have
 
-1. Discuss the destination from `get_destination_guide`: summary, areas, season note, visa note, and the day outline.
-2. One clarifying question when origin, dates, or travelers are missing. Do not ask for a budget.
-3. When those slots are complete: the itinerary, then exactly 3 flights. Each flight is airline, flight number, and times. No price.
+1. On the turn a country or city is named, discuss it from `get_destination_guide`: summary, areas, season note, visa note, and the day outline. Do not repeat that on the next turn.
+2. One clarifying question when origin, dates, or travelers are missing. Do not ask for a budget. Ask each missing slot once.
+3. Later turns continue. Do not repeat the guide, the day plan, or a flight list already in the thread. `besok`, `lusa`, and `hari ini` are dates. When those slots are complete: exactly 3 flights. Each flight is airline, flight number, and times. No price.
 4. Places to stay only after a pick or an explicit ask. Name and area only. No nightly rate.
 5. After lock: the `plan_notifications` schedule, channel in-app. No price on the lock line.
 6. Never display `Rp`, `juta`, or `rb`. Refuse a flight that is not in the tool list without quoting a fare.
-7. Training pack S1–S5 is the release gate (`npm run train`). The chatbot imitates `specs/training/results/latest.md`.
+7. Training pack S1–S6 is the release gate (`npm run train`). S6 is the continuation turn. The chatbot imitates `specs/training/results/latest.md` for the turn that matches, and does not paste an earlier PASS reply again.
 
 ## Non-goals
 

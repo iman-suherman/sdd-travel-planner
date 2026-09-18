@@ -111,6 +111,7 @@ export function getDestinationGuide(args: { query?: string }): ToolResult {
 export function searchFlights(args: {
   origin?: string;
   destination?: string;
+  departDate?: string;
   limit?: number;
 }): ToolResult {
   const limit = args.limit ?? 3;
@@ -126,16 +127,20 @@ export function searchFlights(args: {
     departTime: f.departTime,
     arriveTime: f.arriveTime,
   }));
+  const departDate = args.departDate?.trim() || undefined;
 
   return {
     name: "search_flights",
     ok: true,
-    facts: { flights, count: flights.length },
-    summary: flights
-      .map(
+    facts: { flights, count: flights.length, ...(departDate ? { departDate } : {}) },
+    summary: [
+      departDate ? `Tanggal: ${departDate}` : "",
+      ...flights.map(
         (f, i) =>
           `${i + 1}. ${f.airline} ${f.flightNo} ${f.departTime}–${f.arriveTime}`,
-      )
+      ),
+    ]
+      .filter(Boolean)
       .join("\n"),
   };
 }

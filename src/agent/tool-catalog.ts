@@ -50,6 +50,7 @@ export function chatCheckLines(pack: CapabilityPack): string[] {
     `- **S3.** Run S2, then type \`Yang nomor 2, sekalian hotel di Bali\`. Expect stay names and areas. No nightly rate. Spec: ${spec("search_hotels")}.`,
     `- **S4.** Type \`Ada tiket Garuda jam 3 pagi harga 900rb?\`. Expect a refusal of that flight and no price in the reply. Spec: ${spec("search_flights")}.`,
     `- **S5.** Click \`Kunci opsi 2 dan ingatkan aku sebelum berangkat\`. Expect the three in-app titles. No price. Spec: ${spec("plan_notifications")}.`,
+    `- **S6.** After S1, type \`berangkat dari Jakarta, besok, saya dan istri aja\`. Expect the three Tokyo flights and no repeat of the guide. besok is the date. Spec: ${spec("search_flights")}.`,
     "",
     "A green pass bar does not mean these bubbles will match. Read the reply.",
   ];
@@ -57,6 +58,28 @@ export function chatCheckLines(pack: CapabilityPack): string[] {
 
 export function toolMeaning(pack: CapabilityPack, name: string): string | undefined {
   return pack.modules.tools?.catalog?.find((tool) => tool.name === name)?.meaning;
+}
+
+export function resolvedDate(text: string, now = new Date()): string {
+  const fmt = (d: Date) =>
+    new Intl.DateTimeFormat("id-ID", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(d);
+  const lower = text.toLowerCase();
+  if (/\bbesok\b/.test(lower)) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    return fmt(d);
+  }
+  if (/\blusa\b/.test(lower)) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 2);
+    return fmt(d);
+  }
+  if (/hari ini/.test(lower)) return fmt(now);
+  return "";
 }
 
 /** Which catalog tools this sentence should run. Rules live on the pack, not in the chat route. */
@@ -74,6 +97,7 @@ export function inferForceTools(
   const query = firstMatch(last, resolve?.places) || place;
   const origin = firstMatch(last, resolve?.origins) || "Jakarta";
   const cheaper = resolve?.cheaper ? rx(resolve.cheaper).test(last) : false;
+  const dateText = resolvedDate(last) || resolvedDate(history);
   const out: ForcedTool[] = [];
 
   for (const tool of catalog) {
@@ -96,6 +120,7 @@ export function inferForceTools(
       else if (raw === "@query") args[key] = query;
       else if (raw === "@origin") args[key] = origin;
       else if (raw === "@cheaper") args[key] = cheaper;
+      else if (raw === "@date") args[key] = dateText;
       else args[key] = raw;
     }
     out.push({ name: tool.name, arguments: args });

@@ -1,8 +1,8 @@
 {
   "control_plane_path": "vendor/aor",
-  "source": "/Users/iman.suherman/src/agent-on-rails/agent-on-rails-control-plane",
   "commit": "42ea05999866b548f3a356d1b839078d9f57f736",
   "short": "42ea059",
   "guide": "guides/chatbot-training-orchestration.md",
-  "strapped_at": "2026-09-18T22:37:26Z"
+  "generated_at": "2026-09-18T22:53:24Z",
+  "out": ".aor/generated-control-plane"
 }

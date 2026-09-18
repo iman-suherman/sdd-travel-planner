@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadPack, templateFallback } from "../agent/compose";
-import { chatCheckLines } from "../agent/tool-catalog";
+import { chatCheckLines, resolvedDate } from "../agent/tool-catalog";
 import { runAgent } from "../agent/runner";
 import { runTool, type ToolCall } from "../agent/tools";
 import { runJudges, type JudgeContext } from "./judges";
@@ -116,6 +116,36 @@ const SCENARIOS: Scenario[] = [
     mockReply:
       "Opsi 2 terkunci. Pengingat in-app dari jadwal:\n- 14 hari sebelum berangkat: **Cek dokumen perjalanan**\n- 7 hari sebelum berangkat: **Kunci penerbangan dan hotel**\n- 1 hari sebelum berangkat: **Pengingat berangkat**\n\nItu saja. Tidak ada channel lain di data.",
   },
+  {
+    id: "S6",
+    title: "Continue after the guide; do not repeat it",
+    turns: [
+      { role: "user", content: "Mau ke Jepang" },
+      {
+        role: "assistant",
+        content:
+          "Kalau Jepang tanpa kota, panduan memakai Tokyo (Shinjuku, Asakusa, Shibuya). Hari 1: tiba di NRT. Hari 2: Asakusa lalu Shibuya. Hari 3: longgar, ke NRT.\n\nBerangkat dari mana?",
+      },
+      {
+        role: "user",
+        content: "berangkat dari Jakarta, besok, saya dan istri aja",
+      },
+    ],
+    forceTools: [
+      {
+        name: "search_flights",
+        arguments: {
+          origin: "Jakarta",
+          destination: "Tokyo",
+          departDate: resolvedDate("besok"),
+          limit: 3,
+        },
+      },
+    ],
+    judge: { expectThreeOptions: true, expectContinue: true },
+    mockReply:
+      "Jakarta, besok, 2 orang (kamu dan istri). Panduan Tokyo sudah di atas, tidak aku ulang.\n\n3 opsi terbang, tanpa harga:\n1. **JL-720** Japan Airlines 22:30–07:40\n2. **GA-880** Garuda Indonesia 23:55–09:10\n3. **QZ-202** AirAsia 21:15–06:50\n\nPilih 1/2/3?",
+  },
 ];
 
 async function ollamaUp(baseUrl: string): Promise<boolean> {
@@ -187,6 +217,11 @@ const AUDIENCE: Record<string, { waiting: string; want: string }> = {
     waiting: "Tools first: plan_notifications only. Titles and in-app. No fares.",
     want: "List the in-app reminders. Do not add a price on the lock line.",
   },
+  S6: {
+    waiting:
+      "The guide was already said. Tools first: search_flights CGK–NRT. besok is the date in the JSON.",
+    want: "Acknowledge Jakarta, besok, and 2 orang, then exactly 3 flights. Do not open with the first-turn guide paragraph. Do not ask for a date.",
+  },
 };
 
 const FIX: Record<string, string> = {
@@ -206,6 +241,8 @@ const FIX: Record<string, string> = {
     "After the explanation, ask one missing slot: origin, dates, or travelers. Do not ask for budget.",
   hotels:
     "Stay names and areas must come from search_hotels. No nightly rate.",
+  continue:
+    "The guide is already in the thread. Do not paste it again. Acknowledge Jakarta, besok, and 2 orang, then print JL-720, GA-880, and QZ-202. Do not ask for a date.",
   bahasa:
     "SPEC-002: stay Bahasa-first. City and airline names may stay English.",
   "no-filler":
@@ -363,7 +400,7 @@ function printIntro(opts: {
   boxText("3  POST /v1/chat/completions", blue + bold);
   boxText("4  judges.ts checks the text. No second model.", yellow);
   boxText("");
-  boxText("Pass bar: S4 must pass, and at least 4 of 5. A green bar can still hide a red S5.", bold);
+  boxText("Pass bar: S4 and S6 must pass, and at least 5 of 6. A green bar can still hide a red S5.", bold);
   boxText("A red bar means edit the SPEC or the pack, then run this command again.", yellow);
   closeBox(cyan);
 }
@@ -394,7 +431,7 @@ async function main() {
   ];
 
   let passCount = 0;
-  const required = new Set(["S4"]);
+  const required = new Set(["S4", "S6"]);
   let requiredFailed = false;
 
   for (const [index, scenario] of SCENARIOS.entries()) {
@@ -512,12 +549,14 @@ async function main() {
     closeBox(pass ? green : red);
   }
 
-  const barOk = !requiredFailed && passCount >= 4;
+  const total = SCENARIOS.length;
+  const need = Math.max(4, total - 1);
+  const barOk = !requiredFailed && passCount >= need;
   const check = chatCheckLines(pack);
   lines.push("---");
   lines.push("");
   lines.push(
-    `**Pass bar:** ${passCount}/5 scenarios, S4 required — ${barOk ? "PASS" : "FAIL"}`,
+    `**Pass bar:** ${passCount}/${total} scenarios, S4 and S6 required — ${barOk ? "PASS" : "FAIL"}`,
   );
   lines.push("");
   lines.push("## Check the same pack in the chatbot");
@@ -531,12 +570,12 @@ async function main() {
   writeFileSync(outPath, lines.join("\n"), "utf8");
   writeFileSync(join(RESULTS, "latest.md"), lines.join("\n"), "utf8");
 
-  openBox(barOk ? `Pass bar  PASS ${passCount}/5` : `Pass bar  FAIL ${passCount}/5`, barOk ? green : red);
+  openBox(barOk ? `Pass bar  PASS ${passCount}/${total}` : `Pass bar  FAIL ${passCount}/${total}`, barOk ? green : red);
   boxText(`Wrote ${outPath}`, dim);
   boxText(
     barOk
-      ? "S4 passed and at least 4 scenarios passed."
-      : "Need S4 green and at least 4 of 5.",
+      ? "S4 and S6 passed and at least 5 scenarios passed."
+      : "Need S4 and S6 green and at least 5 of 6.",
     (barOk ? green : red) + bold,
   );
   if (!barOk) {

@@ -6,7 +6,7 @@ Fifty minutes. The room should leave knowing the holiday plan is a contract you 
 
 **Model:** `qwen3.5:latest` at `http://127.0.0.1:11434`. Same GGUF before and after. Do not pull another model during the hour.
 
-**Pack the gate scores:** `tripspec-nl@2026-09-19.3` in `contracts/packs/tripspec-nl.baseline.json`. AOR writes this from `contracts/vibe.md`. It is not in git. It is not a spec.
+**Pack the gate scores:** `tripspec-nl@2026-09-19.4` in `contracts/packs/tripspec-nl.baseline.json`. AOR writes this from `contracts/vibe.md`. It is not in git. It is not a spec.
 
 **Not in git, written on the demo machine:**
 
@@ -44,7 +44,7 @@ What each step is waiting on, and what “done” means:
 2. **Strap.** `vendor/aor` is on this machine. It is not in git. The control plane is no longer a path outside the repo.
 3. **Contracts.** `contracts/vibe.md` is the entry. Copy that file as the vibe. AOR writes the pack and the capability schema. The chatbot does not read the vibe.
 4. **Generate specs.** After the command, `specs/requirements/` and `specs/product/` exist and contain files. Old `SPEC-001` files left over from an earlier checkout do not count.
-5. **Train.** `latest.md` exists and its pack version equals the pack on disk (`2026-09-19.3`). A report for `@2026-09-19.1` is an older, priced planner. It is not this demo. Re-run train.
+5. **Train.** `latest.md` exists and its pack version equals the pack on disk (`2026-09-19.4`). A report for `@2026-09-19.1` is an older, priced planner. It is not this demo. Re-run train.
 6. **Demo.** The UI is `http://localhost:3000`. The first message the traveler sends is refused until step 5 has a matching report. The footer under the composer shows the model, the pack, and `specs/training/results/latest.md`.
 
 `npm run train` does not load the previous report. That keeps the score independent. Only the chatbot loads it.
@@ -117,7 +117,7 @@ When it finishes, open the folder. Do not claim success from the pin alone.
 | `specs/requirements/` | The requirement specs (`SD-…`). This is the persisted spec. |
 | `specs/training/` | Scenarios and the eval checklist shape. Not the score. The score is the next command. |
 | `contracts/vibe.md` | Paste-ready vibe. In git. `npm run contracts` reads this. |
-| `contracts/packs/tripspec-nl.baseline.json` | What Ollama is told, and what `npm run train` scores. AOR writes it. Not in git. Version `2026-09-19.3`. |
+| `contracts/packs/tripspec-nl.baseline.json` | What Ollama is told, and what `npm run train` scores. AOR writes it. Not in git. Version `2026-09-19.4`. |
 
 Read three hard rules out loud, from `modules.reply_rules.hard_rules`:
 
@@ -159,7 +159,7 @@ After S5 the same text is written twice:
 - `specs/training/results/<utc-stamp>.md`
 - `specs/training/results/latest.md`
 
-Both are gitignored. `npm run help` reads the pack version inside `latest.md`. If it is not `2026-09-19.3`, step 3 stays `not yet`.
+Both are gitignored. `npm run help` reads the pack version inside `latest.md`. If it is not `2026-09-19.4`, step 3 stays `not yet`.
 
 Pass bar, say it: S4 must pass, and at least 4 of 5. A green bar can still hide a red scenario. Read that scenario before you tell the room the planner is trained.
 
@@ -203,7 +203,7 @@ That regenerates `specs/` (step 2 again) and starts the UI. Open http://localhos
 
 What the browser sends is `POST /api/chat`. What that route sends to Ollama is one system prompt built from two persisted things:
 
-1. The pack `tripspec-nl@2026-09-19.3` (generated from `contracts/vibe.md`).
+1. The pack `tripspec-nl@2026-09-19.4` (generated from `contracts/vibe.md`).
 2. The body of `specs/training/results/latest.md`, cut before the chatbot checklist. The prompt tells the model to imitate PASS replies and not to repeat a FAIL pattern.
 
 If `latest.md` is missing, the route returns an error and the bubble says to run `npm run train`. That is deliberate. An untrained chat is not part of the demo.

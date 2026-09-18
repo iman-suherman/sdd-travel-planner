@@ -46,6 +46,8 @@ export type JudgeContext = {
   expectGuide?: boolean;
   expectDayPlan?: boolean;
   expectNotifications?: boolean;
+  /** Later turn must not reprint the guide or ask for slots already given. */
+  expectContinue?: boolean;
   inventBait?: string[];
 };
 
@@ -253,6 +255,24 @@ export function judgeNotifications(
   };
 }
 
+export function judgeContinue(reply: string, expect: boolean): JudgeResult {
+  if (!expect) return { name: "continue", pass: true, detail: "Skipped" };
+  const repeats = /kalau kamu bilang jepang/i.test(reply) || /musim semi dan gugur/i.test(reply);
+  const asksAgain =
+    /tanggal spesifik|kapan tanggalnya|berangkat dari mana|berapa orang yang ikut|mohon lengkapi|belum punya konteks/i.test(
+      reply,
+    );
+  const movesOn = /jakarta/i.test(reply) && /JL-720|GA-880|QZ-202/.test(reply);
+  const pass = !repeats && !asksAgain && movesOn;
+  return {
+    name: "continue",
+    pass,
+    detail: pass
+      ? "Continued with flights and did not reprint the guide"
+      : "Repeated the guide or asked again for a slot already given",
+  };
+}
+
 export function runJudges(ctx: JudgeContext): JudgeResult[] {
   return [
     judgeBahasa(ctx.reply),
@@ -263,6 +283,7 @@ export function runJudges(ctx: JudgeContext): JudgeResult[] {
     judgeOptionCount(ctx.reply, Boolean(ctx.expectThreeOptions)),
     judgeHotels(ctx.reply, ctx.toolResults, Boolean(ctx.expectHotels)),
     judgeNotifications(ctx.reply, ctx.toolResults, Boolean(ctx.expectNotifications)),
+    judgeContinue(ctx.reply, Boolean(ctx.expectContinue)),
     judgeGrounding(ctx.reply, ctx.toolResults),
     judgeRefuseInvent(ctx.reply, ctx.inventBait, Boolean(ctx.expectRefuseInvent)),
   ];

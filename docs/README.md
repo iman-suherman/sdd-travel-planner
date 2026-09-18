@@ -5,6 +5,7 @@ TripSpec is a travel planner trained with SPECs and evals, not fine-tuning. Thes
 | Doc | What it is |
 | --- | --- |
 | [presentation.md](./presentation.md) | 50-minute talk. What to say, what to open, before versus after. |
+| [cleanup.md](./cleanup.md) | Wipe generated files so the demo starts again at `npm run strap`. |
 | [training-execution.md](./training-execution.md) | How the gate is run, scenario by scenario. |
 | [`../specs/training/results/2026-09-18T21-23-35.md`](../specs/training/results/2026-09-18T21-23-35.md) | Planner gate, mode **mock**, pack `tripspec-nl@2026-09-19.1`, S1–S5 **PASS**. |
 

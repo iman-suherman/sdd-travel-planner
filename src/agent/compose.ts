@@ -158,7 +158,7 @@ export function composeSystemPrompt(
     lines.push("");
     lines.push("PERSISTED TRAINING RESULTS");
     lines.push(
-      "Saved by npm run train at specs/training/results/latest.md. Imitate replies marked PASS. Do not repeat a pattern the report marks FAIL. The GGUF was not updated.",
+      "Saved by npm run train at specs/training/results/latest.md. Imitate a PASS reply only when the latest traveler sentence matches that scenario. If this thread already contains the guide or the flight list, do not paste that PASS reply again. Continue from the new slots. besok, lusa, and hari ini are dates; do not ask for tanggal spesifik after one of them. Do not repeat a pattern the report marks FAIL. The GGUF was not updated.",
     );
     lines.push(trainingResults);
   }
