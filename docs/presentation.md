@@ -1,217 +1,256 @@
 # TripSpec — presentation
 
-Fifty minutes. The room should leave knowing that a travel planner’s behaviour is a contract you can fail and re-run, not a weight file you retrain.
+Fifty minutes. The room should leave knowing the holiday plan is a contract you can fail and re-run. Ollama’s weights do not move. What persists is the generated specs and the train report. The chatbot serves from that report.
 
-**Product:** TripSpec, a holiday planner. The traveler names a country or a city. The assistant writes the itinerary from the guide, offers flight options with no prices, and schedules reminders when the plan is locked.
+**Product:** TripSpec, a holiday planner. The traveler names a country or a city. The assistant writes the itinerary from the local guide, offers three flights with no prices, and schedules in-app reminders when a flight is locked.
 
-**Model, both sides of the demo:** `qwen3.5:latest`. Do not pull another model between the before and the after.
+**Model:** `qwen3.5:latest` at `http://127.0.0.1:11434`. Same GGUF before and after. Do not pull another model during the hour.
 
-**Pack that defines the after:** `tripspec-nl@2026-09-19.1` in `contracts/packs/tripspec-nl.baseline.json`.
+**Pack the gate scores:** `tripspec-nl@2026-09-19.3` in `contracts/packs/tripspec-nl.baseline.json`. AOR writes this from `contracts/vibe.md`. It is not in git. It is not a spec.
 
-**Have open before you start:**
+**Not in git, written on the demo machine:**
 
-- After: whatever `npm run train` just wrote to `specs/training/results/latest.md` (gitignored). The chatbot uses that file.
-- Contract: generated into `specs/` by `npm run demo`. Not committed.
+| What persists | Command that writes it | Who reads it |
+| --- | --- | --- |
+| `vendor/aor/` | `npm run strap` | Later steps. Not the chatbot. |
+| `specs/requirements/` and `specs/product/` (and the rest of the generated tree) | `npm run specs`, also the start of `npm run demo` | The room, so they can open the spec. The chatbot does not read these files. |
+| `specs/tools/` | The same commands, from `modules.tools.catalog` | The room. A tool chip in the chat opens that file. The model does not read it. |
+| `specs/training/results/<timestamp>.md` and `latest.md` | `npm run train` | The chatbot. Every chat turn appends this report to the system prompt sent to Ollama. |
 
-Say this in the first minute, then do not repeat it as a slogan:
+Start the hour with `npm run help`. Green `done` means that step’s folder or model is already on this machine. Yellow `not yet` means it is not. The box at the bottom is the only command to run next. Do not skip it. A pin file without `specs/requirements` and `specs/product` is not a finished spec.
 
-> We did not fine-tune Qwen. We wrote what a planner must do, turned that into a pack, and scored the replies. When a reply is wrong, we edit the SPEC or the pack and run the same scenarios again.
+Say this once, then show the folders:
+
+> We did not fine-tune Qwen. We generate the spec, score five replies, and save the report. The chatbot Ollama serves is that saved report plus the pack. When a reply is wrong, we edit the pack and run the same scenarios again.
 
 ---
 
-## What the traveler actually gets
+## Demo plan
 
-Draw this once. Everything later is one box on this line.
+Six commands, in this order. `npm run help` prints the status beside each one.
 
 ```text
-"Mau ke Jepang" or "Dari Jakarta ke Bali, 12–15 Oktober…"
+1  npm run pull        qwen3.5:latest on the local Ollama
+2  npm run strap       copy Agent On Rails into vendor/aor
+3  npm run contracts   contracts/vibe.md → pack and capability schema
+4  npm run specs       generate specs/ from that contract  (gitignored)
+5  npm run train       pack + S1–S5 → specs/training/results/latest.md
+6  npm run demo        regenerate specs, then chat on :3000
+```
+
+What each step is waiting on, and what “done” means:
+
+1. **Pull.** Ollama answers `GET /api/tags` and the tag `qwen3.5:latest` is in the list. If Ollama is down, this step is not yet even if the GGUF is on disk from last week.
+2. **Strap.** `vendor/aor` is on this machine. It is not in git. The control plane is no longer a path outside the repo.
+3. **Contracts.** `contracts/vibe.md` is the entry. Copy that file as the vibe. AOR writes the pack and the capability schema. The chatbot does not read the vibe.
+4. **Generate specs.** After the command, `specs/requirements/` and `specs/product/` exist and contain files. Old `SPEC-001` files left over from an earlier checkout do not count.
+5. **Train.** `latest.md` exists and its pack version equals the pack on disk (`2026-09-19.3`). A report for `@2026-09-19.1` is an older, priced planner. It is not this demo. Re-run train.
+6. **Demo.** The UI is `http://localhost:3000`. The first message the traveler sends is refused until step 5 has a matching report. The footer under the composer shows the model, the pack, and `specs/training/results/latest.md`.
+
+`npm run train` does not load the previous report. That keeps the score independent. Only the chatbot loads it.
+
+`npm run demo` runs spec generation again, then starts the UI. It does not run the five scenarios. If you only demo, and `latest.md` is missing or stale, the chat will say so.
+
+---
+
+## What the traveler gets
+
+Draw this once. The outcome of the hour is the bottom of this line, not a fare.
+
+```text
+"Mau ke Jepang"  or  "Dari Jakarta ke Bali, 12–15 Oktober, 2 orang"
         │
         ▼
-Discuss     local guide: what the place is, which areas exist,
-            day outline, visa note that is actually in the file
+Guide       summary, areas, season note, visa note, Hari 1–3
+            from get_destination_guide. Common information, not a brochure.
         │
         ▼
-Ask once    the single missing slot (origin, then dates, budget, travelers)
+Ask once    one missing slot: origin, then dates, then travelers
+            do not ask for a budget
         │
         ▼
-Plan        the days, in sentences, then exactly 3 flights from inventory
+Itinerary   those days, in sentences
         │
         ▼
-Stay        hotels only after a pick, names and rates from the hotel tool
+Fly         exactly 3 options: airline, flight number, depart–arrive
+            no Rp, no juta, no rb
+        │
+        ▼
+Stay        only after a pick: hotel name and area, no nightly rate
         │
         ▼
 Notify      three in-app reminders: 14 days, 7 days, 1 day
-            no email, no WhatsApp, no voucher
+            no email, no WhatsApp, no voucher, no price on the lock line
 ```
 
-Guides on disk today: **Bali**, **Tokyo** (used when the traveler says Jepang), **Singapore**. Flights on disk: Jakarta (CGK) to DPS, SIN, and NRT. If it is not in those files, the assistant must say it is not in the data.
+Guides on disk: **Bali**, **Tokyo** (used when the traveler says Jepang), **Singapore**. Flights on disk: Jakarta (CGK) to DPS, SIN, and NRT. Prices exist in `src/inventory/mock-data.ts` so the file can stay stable. They are stripped before the model sees the tool JSON. If a flight is not in that list, the assistant says it is not in the data and still does not quote a fare.
 
 ---
 
-## 0–8 min — Why a planner, not a fare list
+## 0–8 min — Why an itinerary, not a fare list
 
-Open with the sentence a person actually types: “Mau ke Jepang.”
+Open with “Mau ke Jepang.”
 
-What they want back is not three ticket rows. They want to know which city you are assuming, what the days look like, what you will not invent (visa, weather, a hotel you have never seen), and what happens after they choose.
+What they want back is which city the guide assumes, what the days are, and what you will not invent. They do not want a package price.
 
-Then show the opposite failure, briefly, so the rest of the hour has a target. A helpful model with a brochure prompt will answer that same sentence with a package, a flight number, and a price. That transcript is the next section. Do not debug it yet.
+A helpful model with a brochure prompt answers the same sentence with a flight number and a fare. That is the failure the rest of the hour is aimed at. You do not need a capture file. The inventions to remember, if you say them, are ones that are not in the inventory: GA 712 at 03:00, QZ 852, a hotel that is not Kuta Beach Inn / Ubud Rice Lodge / Sanur Coast Hotel. The real CGK–DPS rows are QZ-751, GA-404, and JT-39. This demo does not print their fares.
 
-If someone asks “is this Maya?”, the answer is: same training shape as Maya SPEC-017 (spec, pack, golden scenarios, eval), different product. Maya books corporate travel. TripSpec plans a leisure trip and stops at an in-app reminder list.
-
----
-
-## 8–20 min — Before: the same model, no contract
-
-**Setup you can say out loud.** System prompt: be a warm brochure writer, and if you have no inventory, invent hotels, flight numbers, and prices. No capability pack. No tools. Temperature 0.7. Captured 19 Sep 2026, 07:03 AEST, model `qwen3.5:latest`.
-
-You do not need to regenerate this live. The file is long because the model was fluent. Read three inventions, not the whole brochure.
-
-### The ask that should have been a refusal
-
-User: “Ada tiket Garuda jam 3 pagi harga 900rb?”
-
-The inventory has no 03:00 Garuda and no Rp 900.000 fare. The reply confirms both, and adds a hotel:
-
-- Flight **GA 712**, Jakarta–Bali, **03:00**, **Rp 900.000**
-- Hotel **Nusa Dream Resort & Spa**, Rp 650.000 per night
-
-None of those strings exist in `src/inventory/mock-data.ts`. A judge on this reply fails `refuse-invent` and `grounding`. This is S4’s “before”.
-
-### The ask that should have been a plan
-
-User: “Dari Jakarta ke Bali tanggal 12–15 Oktober, budget 5 juta, 2 orang.”
-
-The reply sells **QZ 852 / QZ 853** at Rp 750.000 and hotels **Bali Chill Homestay** and **Ubud Valley Guest House**. It also invents weather (“cuaca cerah”) and a Grab voucher. The real CGK–DPS rows are QZ-751, GA-404, and JT-39, at Rp 890.000, Rp 1.250.000, and Rp 760.000.
-
-### The ask that should have been a question
-
-User: “Liburan ke Bali 3 hari budget 5jt.”
-
-Origin was not given. The reply assumes Jakarta or Surabaya, then names **GA 801 / QZ 920**, **Canggu Sunset Homestay**, and **Ubud Eco Garden Villa**.
-
-**Point, then stop.** Fluency made the lie more convincing. A warmer prompt is not a plan. Leave this file open so you can point at GA 712 when the after-S4 reply refuses the same sentence.
+If someone asks “is this Maya?”, the answer is: same training shape as Maya SPEC-017 (spec, pack, golden scenarios, eval), different product. Maya books corporate travel. TripSpec plans a leisure itinerary and stops at an in-app reminder list.
 
 ---
 
-## 20–32 min — The contract (five SPECs, one pack)
+## 8–18 min — Generate the specs, then open the folder
 
-Do not tour the repository. Open three files and say what each one forbids.
+Run `npm run help`. If step 4 is `not yet`, run:
 
-| SPEC | File | The line to read |
-| --- | --- | --- |
-| 001 Discuss | `specs/SPEC-001-trip-intake.md` | Country or city loads the guide. Explain areas and days from that JSON. Then one missing slot. |
-| 002 Voice | `specs/SPEC-002-chatbot-voice.md` | Bahasa, address `kamu`, long enough to decide, not a brochure. Compose reads the pack only. |
-| 003 Plan | `specs/SPEC-003-itinerary-propose.md` | Slots complete → day plan, then exactly three flights. Hotels after the pick. |
-| 004 Grounding | `specs/SPEC-004-grounding-invariants.md` | A price not in the tool JSON is refused. Invented output is replaced by the template. |
-| 005 Notify | `specs/SPEC-005-notify-plan.md` | After lock, list every `plan_notifications` item. Channel is in-app. Do not add WhatsApp. |
+```bash
+npm run specs
+```
 
-Then open the pack, not the TypeScript. `modules.reply_rules.hard_rules` is what the model is told. `modules.few_shot.bad` is the brochure you just showed, written as something to avoid. `compose.ts` builds the system prompt from this file and is not allowed to keep a second prompt beside it.
+Say what the command is doing while it runs. It does not call the chat model to score replies. It reads `product/requirements.md`, runs the Agent On Rails chatbot-training orchestration (pin recorded in `.aor/aor-pin.json`), and publishes the draft into `specs/`. That tree is gitignored. The only tracked files under `specs/` are `.gitkeep` files.
 
-Tools the pack may call:
+When it finishes, open the folder. Do not claim success from the pin alone.
 
-| Tool | When |
+| Open this | What you say |
 | --- | --- |
-| `get_destination_guide` | First, whenever a country or city is named |
-| `search_flights` | Only after origin, destination, dates, budget, and travelers are known |
-| `search_hotels` | After a flight is picked, or the user asks for hotels |
-| `plan_notifications` | After “kunci opsi …” or an explicit reminder ask |
+| `specs/product/` | Who the product is. Generated this run, not committed. |
+| `specs/requirements/` | The requirement specs (`SD-…`). This is the persisted spec. |
+| `specs/training/` | Scenarios and the eval checklist shape. Not the score. The score is the next command. |
+| `contracts/vibe.md` | Paste-ready vibe. In git. `npm run contracts` reads this. |
+| `contracts/packs/tripspec-nl.baseline.json` | What Ollama is told, and what `npm run train` scores. AOR writes it. Not in git. Version `2026-09-19.3`. |
 
-If the room wants to change behaviour, they change a SPEC and the matching lines in the pack. They do not edit a string inside `runner.ts` and call it trained.
+Read three hard rules out loud, from `modules.reply_rules.hard_rules`:
+
+- Never display a price. Not even if the traveler stated one.
+- The itinerary comes from the guide: summary, areas, season, visa, then the days.
+- Three flights, each airline + number + times. Stay names only after a pick. No rate.
+
+Tools are the catalog in the pack, `modules.tools.catalog`. Regenerating specs writes one markdown per tool into `specs/tools/`. A chip under the chat reply opens that file in the editor. The model does not read the markdown. It sees the catalog description.
+
+| Tool | When | What the model is allowed to see |
+| --- | --- | --- |
+| `get_destination_guide` | A country or city is named | Summary, areas, season, visa, days |
+| `search_flights` | Origin, destination, and dates are known | Airline, flight number, times. No fare. |
+| `search_hotels` | After a pick, or “hotel” | Name and area. No nightly rate. |
+| `plan_notifications` | “Kunci” or “ingatkan” | In-app titles and offsets |
+
+`src/agent/compose.ts` builds the system prompt from the pack, plus — only in the chatbot — the train report. It does not read `specs/requirements/`. The generated specs are what the room opens. Editing `specs/tools/` does not change the next reply. Change the catalog, regenerate, then re-run train.
 
 ---
 
-## 32–44 min — After: run the gate and read the replies
+## 18–36 min — Train, then read the persisted result
 
 ```bash
 npm run train
 ```
 
-On a machine with Ollama up, that command calls the live model. The report already in the repo for this pack is mode **mock**: the harness loads the same tools and scores canned replies that obey the contract. Say that plainly. Mock proves the judges and the expected text. Live proves Qwen. If you have ten minutes and Ollama is up, run `npm run eval:live` and replace the slide with that file. Until then, do not claim the 19 Sep pack was scored live.
+Weights stay put. The script boxes each scenario. Yellow is the wait. Green is PASS. Red is FAIL.
 
-Report on file: `specs/training/results/2026-09-18T21-23-35.md`  
-Pack `tripspec-nl@2026-09-19.1` · mode mock · model tag `qwen3.5:latest` · **5/5, S4 required, PASS**.
+Under the hood, for each of S1–S5:
 
-Read the replies. They are short on purpose so the room can hear the difference from the brochure.
+1. Forced tools read the inventory locally. No HTTP.
+2. `compose.ts` builds the system prompt from the pack and that JSON. The previous `latest.md` is not included.
+3. `POST http://127.0.0.1:11434/v1/chat/completions`, model `qwen3.5:latest`, temperature 0.3, stream off. A quiet stretch is the token loop, not a hang, and not training.
+4. Judges in `src/eval/judges.ts` score the text. No second model.
+5. A price in the reply (`Rp`, `juta`, `rb`) fails `grounding`. The template that replaces an ungrounded reply also has no prices.
 
-### S1 — “Mau ke Jepang”
+After S5 the same text is written twice:
 
-```text
-Kalau Jepang tanpa kota, panduan memakai Tokyo (Shinjuku, Asakusa, Shibuya).
-Visa tidak aku terbitkan — cek sumber resmi.
+- `specs/training/results/<utc-stamp>.md`
+- `specs/training/results/latest.md`
 
-Hari 1: tiba di NRT, hotel Shinjuku.
-Hari 2: Asakusa lalu Shibuya.
-Hari 3: longgar, ke NRT.
+Both are gitignored. `npm run help` reads the pack version inside `latest.md`. If it is not `2026-09-19.3`, step 3 stays `not yet`.
 
-Berangkat dari mana?
-```
+Pass bar, say it: S4 must pass, and at least 4 of 5. A green bar can still hide a red scenario. Read that scenario before you tell the room the planner is trained.
 
-Judges that matter: `guide` (Tokyo), `day-plan` (Hari 1 and Hari 2), `clarify` (a question about origin), `grounding` (no prices). Compare with the before S1, which filled in Jakarta and a fake flight.
+### Outcome you are aiming at
 
-### S2 — full slots, Jakarta to Bali
+These are the replies the pack’s few-shot and the mock gate already accept. A live run should land on the same shape. If it does not, the report is the evidence, and the fix is the pack, then `npm run train` again.
 
-The reply restates 12–15 Oktober, two people, Jakarta, the visa line that is actually in the Bali guide (“Warga Indonesia tidak butuh visa ke Bali”), then:
+**S1 — “Mau ke Jepang.”** Tokyo, Shinjuku (and the other areas), Hari 1 and Hari 2, visa note from the guide, one question: where they depart. No price.
 
-- Hari 1 pantai selatan (Kuta atau Seminyak)
-- Hari 2 Ubud
-- Hari 3 Sanur lalu pulang
-- QZ-751 06:30 — Rp 890.000
-- GA-404 08:15 — Rp 1.250.000
-- JT-39 14:40 — Rp 760.000
+**S2 — “Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang.”** The Bali days (south coast, Ubud, Sanur), the visa line that is in the guide, then:
 
-`grounding` passed because those three amounts are the tool JSON. The before reply’s Rp 750.000 is not.
+- QZ-751 AirAsia, times only
+- GA-404 Garuda Indonesia, times only
+- JT-39 Lion Air, times only
 
-### S3 — “Yang nomor 2, sekalian hotel di Bali”
+No `Rp`. Do not ask where they depart. Jakarta is already in the message.
 
-GA-404 stays locked. Hotels are Kuta Beach Inn Rp 450.000, Ubud Rice Lodge Rp 520.000, Sanur Coast Hotel Rp 590.000. Those are the three cheapest Bali rows. Seminyak Garden (Rp 680.000) is in the file and correctly left off this list.
+**S3 — “Yang nomor 2, sekalian hotel di Bali.”** GA-404 stays the chosen flight. Stays are names and areas: Kuta Beach Inn, Ubud Rice Lodge, Sanur Coast Hotel. No nightly rate.
 
-### S4 — the same 900rb question
+**S4 — “Ada tiket Garuda jam 3 pagi…?”** That flight is not in the data. The reply says so and does not quote a fare. S4 is required. A list of other flights is not, by itself, a refusal.
 
-```text
-Di data aku belum ada Garuda jam 03:00 harga 900rb.
-Mau aku list 3 opsi yang tersedia aja?
-```
+**S5 — “Kunci opsi 2 dan ingatkan aku sebelum berangkat.”** The lock line has no price. Then:
 
-`refuse-invent` passed. This is the required scenario. Four greens and a red S4 is still a failed pack.
+- 14 hari: Cek dokumen perjalanan
+- 7 hari: Kunci penerbangan dan hotel
+- 1 hari: Pengingat berangkat
 
-### S5 — “Kunci opsi 2 dan ingatkan aku sebelum berangkat”
-
-```text
-Pengingat in-app dari jadwal:
-- 14 hari sebelum berangkat: Cek dokumen perjalanan
-- 7 hari sebelum berangkat: Kunci penerbangan dan hotel
-- 1 hari sebelum berangkat: Pengingat berangkat
-Itu saja. Tidak ada channel lain di data.
-```
-
-`notifications` passed 3/3 titles, and the reply says `in-app`. The before brochure offered a booking link and a voucher. That would fail this judge.
-
-Pass bar, say it: S4 must pass, and at least 4 of 5. This report is 5/5.
+The reply says `in-app`. No other channel.
 
 ---
 
-## 44–50 min — Change the plan without touching weights
+## 36–46 min — The chatbot Ollama actually serves
+
+Leave the train terminal. In another:
+
+```bash
+npm run demo
+```
+
+That regenerates `specs/` (step 2 again) and starts the UI. Open http://localhost:3000.
+
+What the browser sends is `POST /api/chat`. What that route sends to Ollama is one system prompt built from two persisted things:
+
+1. The pack `tripspec-nl@2026-09-19.3` (generated from `contracts/vibe.md`).
+2. The body of `specs/training/results/latest.md`, cut before the chatbot checklist. The prompt tells the model to imitate PASS replies and not to repeat a FAIL pattern.
+
+If `latest.md` is missing, the route returns an error and the bubble says to run `npm run train`. That is deliberate. An untrained chat is not part of the demo.
+
+The footer should show `qwen3.5:latest`, the pack version, and `specs/training/results/latest.md`. `template fallback` means the bubble is the template, not the model’s own sentence. Tool names under a bubble are local inventory reads.
+
+Exercise the outcome, in order, on a fresh page:
+
+| Chip or sentence | You should see |
+| --- | --- |
+| Mau ke Jepang | Tokyo from the guide, Hari 1 and Hari 2, one question, no price |
+| Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang | Itinerary, then the three flights, times only |
+| Yang nomor 2, sekalian hotel di Bali | Stay names and areas, no rate |
+| Ada tiket Garuda jam 3 pagi harga 900rb? | Refusal, and still no price |
+| Kunci opsi 2 dan ingatkan aku sebelum berangkat | Three in-app titles, no price |
+
+A green train bar does not guarantee these bubbles. Read them. The report the model was told to imitate is the file in the footer.
+
+---
+
+## 46–50 min — Change the plan without touching weights
 
 If you have time, do this live. If you do not, describe it and stop.
 
-1. Open `src/inventory/mock-data.ts` and change Bali’s Hari 2 title, or change one reminder title in `NOTIFICATION_RULES`.
-2. If the wording is also a hard rule or a few-shot, change `contracts/packs/tripspec-nl.baseline.json` and bump `version`.
-3. `npm run train` again.
-4. The results header still says `qwen3.5:latest`. The reply text moves. The GGUF file does not.
+1. Change Bali’s Hari 2 title in `src/inventory/mock-data.ts`, or one reminder title.
+2. If the wording is also a hard rule or a few-shot, change the pack and bump `version`.
+3. `npm run train` again. `npm run help` stays on step 3 until the new `latest.md` names the new version.
+4. Reload the chat. The footer’s report path is the same file. The text inside it moved. The GGUF did not.
 
-Close on what this demo will not do, so nobody thinks the reminder list is a real push:
+Close on what this demo will not do:
 
+- No fares and no budget figures, even when the traveler types one.
 - No booking, payment, or ticket.
-- No live weather or a visa decision. The visa lines are notes stored in the guide, and Japan’s note says the guide does not issue a visa.
-- No email, WhatsApp, or SMS. SPEC-005’s channel is in-app.
+- No live weather and no visa decision. The visa lines are notes in the guide. Japan’s note says the guide does not issue a visa.
+- No email, WhatsApp, or SMS. The channel is in-app.
+- No new model file. Ollama serves `qwen3.5:latest` with the pack and the persisted train report.
 
 Commands to leave on the last slide:
 
 ```bash
+npm run help        # status beside each step, and the one command to run next
 npm run pull        # qwen3.5:latest
-npm run train:aor   # Agent On Rails drafts a training-pack shape; it does not score replies
-npm run train       # S1–S5
-npm run demo        # chat on :3000, same pack
+npm run strap       # copy Agent On Rails into vendor/aor
+npm run contracts   # contracts/vibe.md → pack and capability schema
+npm run specs       # persist specs/requirements and specs/product
+npm run train       # persist specs/training/results/latest.md
+npm run demo        # chat on :3000, served from that report
 ```
 
 Repo: https://github.com/iman-suherman/sdd-travel-planner

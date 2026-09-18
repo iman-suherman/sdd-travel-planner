@@ -23,13 +23,16 @@ cd ~/src/personal/sdd-travel-planner
 cp .env.example .env   # optional
 npm install
 npm install --prefix apps/chat
+npm run help                 # what is already done on this machine, and the next command
 
 npm run pull                 # ollama pull qwen3.5:latest
+npm run strap                # copy Agent On Rails into vendor/aor
+npm run contracts            # contracts/vibe.md → pack and capability schema
 npm run demo                 # generates specs/, then chat UI :3000
 npm run train                # writes specs/training/results/latest.md, which the chatbot reads
 ```
 
-`specs/` is not in git. `npm run demo` generates it from `product/requirements.md`. The chatbot will not answer until `npm run train` has written `specs/training/results/latest.md`.
+`vendor/aor`, `specs/`, the pack, and the capability schema are not in git. `npm run strap` copies Agent on Rails onto this machine. `npm run contracts` writes the pack from `contracts/vibe.md`. `npm run specs` runs after that. The chatbot will not answer until `npm run train` has written `specs/training/results/latest.md`.
 
 Env:
 
@@ -58,9 +61,11 @@ Env:
 | Command | Does |
 |---------|------|
 | `npm run pull` | `ollama pull` default model (`qwen3.5:latest`) |
-| `npm run train:aor` | Latest AOR control-plane `orchestrate.sh` → `.aor/generated-control-plane/` |
+| `npm run strap` | Copy the AOR control plane into `vendor/aor` |
+| `npm run contracts` | `contracts/vibe.md` → pack and capability schema, via AOR |
+| `npm run specs` | Generate `specs/` from the strapped control plane |
 | `npm run train` | Load pack → S1–S5 → `specs/training/results/` |
-| `npm run train:all` | `train:aor` then `train` |
+| `npm run train:all` | `specs` then `train` |
 | `npm run eval:mock` | Deterministic / canned replies (no Ollama) |
 | `npm run eval:live` | Force live Ollama runs |
 | `npm run demo` | Check Ollama (pull if needed) + start UI `:3000` |

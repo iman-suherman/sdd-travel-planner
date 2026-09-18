@@ -7,11 +7,11 @@ import {
 } from "./compose";
 import {
   runTool,
-  TOOL_DEFINITIONS,
+  toolDefinitions,
   type ToolCall,
-  type ToolName,
   type ToolResult,
 } from "./tools";
+import { toolMeaning } from "./tool-catalog";
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -60,17 +60,6 @@ function isUngrounded(reply: string): boolean {
   return showsPrice(reply);
 }
 
-const TOOL_MEANING: Record<string, string> = {
-  get_destination_guide:
-    "Local guide only. Jepang maps to Tokyo. Returns areas, day plan, visa note. No fare and no web search.",
-  search_flights:
-    "Mock flights for the itinerary. Airline, flight number, and times. No fare. Does not book.",
-  search_hotels:
-    "Places to stay after a pick. Name and area only. No nightly rate.",
-  plan_notifications:
-    "In-app reminders only (14 days, 7 days, 1 day). No email, WhatsApp, SMS, or push.",
-};
-
 function previewSystem(content: string): string[] {
   const all = content.split("\n");
   const out: string[] = [];
@@ -100,6 +89,7 @@ function tracePayload(
   apiKey: string | undefined,
   body: Record<string, unknown>,
   onTrace: (line: string) => void,
+  meanings: Record<string, string>,
 ) {
   const messages = (body.messages as ChatMessage[] | undefined) ?? [];
   const tools =
@@ -136,7 +126,7 @@ function tracePayload(
   );
   for (const tool of tools) {
     const name = tool.function?.name ?? "unknown";
-    onTrace(`   Tools  ${name} — ${TOOL_MEANING[name] ?? tool.function?.description ?? "offered to the model"}`);
+    onTrace(`   Tools  ${name} — ${meanings[name] ?? tool.function?.description ?? "offered to the model"}`);
   }
   onTrace(
     "   Wait  under the hood: fetch() blocks this script. The scenario does not score, and the next scenario does not start, until this response arrives.",
@@ -218,6 +208,7 @@ async function ollamaChat(
   apiKey: string | undefined,
   body: Record<string, unknown>,
   onTrace?: (line: string) => void,
+  meanings: Record<string, string> = {},
 ): Promise<{
   message?: ChatMessage & {
     tool_calls?: ChatMessage["tool_calls"];
@@ -230,7 +221,7 @@ async function ollamaChat(
   };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
-  if (onTrace) tracePayload(url, apiKey, body, onTrace);
+  if (onTrace) tracePayload(url, apiKey, body, onTrace, meanings);
   const stopWatch = startOllamaWatch(baseUrl, String(body.model ?? ""), onTrace);
 
   const started = Date.now();
@@ -274,6 +265,9 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
   const apiKey = opts.apiKey ?? process.env.OLLAMA_API_KEY;
   const maxToolRounds = opts.maxToolRounds ?? 2;
   const trace = opts.onTrace;
+  const meanings = Object.fromEntries(
+    (pack.modules.tools?.catalog ?? []).map((tool) => [tool.name, tool.meaning]),
+  );
 
   const toolResults: ToolResult[] = [];
 
@@ -284,7 +278,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
       toolResults.push(result);
       const arg = JSON.stringify(call.arguments);
       trace?.(`        ${call.name} ${arg} → ${result.ok ? "ok" : "empty"}`);
-      const meaning = TOOL_MEANING[call.name];
+      const meaning = toolMeaning(pack, call.name);
       if (meaning) trace?.(`   Tools  ${call.name} — ${meaning}`);
     }
   } else {
@@ -334,10 +328,11 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
       {
         model,
         messages,
-        tools: TOOL_DEFINITIONS,
+        tools: toolDefinitions(pack),
         temperature: 0.3,
       },
       trace,
+      meanings,
     );
     const msg = assistantMessage(data);
 
@@ -355,7 +350,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
           args = {};
         }
         const result = runTool({
-          name: tc.function.name as ToolName,
+          name: tc.function.name,
           arguments: args,
         });
         toolResults.push(result);

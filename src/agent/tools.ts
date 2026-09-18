@@ -7,20 +7,15 @@ import {
   type FlightOffer,
   type HotelOffer,
 } from "../inventory/mock-data";
-
-export type ToolName =
-  | "get_destination_guide"
-  | "search_flights"
-  | "search_hotels"
-  | "plan_notifications";
+import type { CapabilityPack } from "./compose";
 
 export type ToolCall = {
-  name: ToolName;
+  name: string;
   arguments: Record<string, unknown>;
 };
 
 export type ToolResult = {
-  name: ToolName;
+  name: string;
   ok: boolean;
   facts: Record<string, unknown>;
   summary: string;
@@ -228,65 +223,24 @@ export function runTool(call: ToolCall): ToolResult {
   };
 }
 
-export const TOOL_DEFINITIONS = [
-  {
+export function toolDefinitions(pack: CapabilityPack) {
+  return (pack.modules.tools?.catalog ?? []).map((tool) => ({
     type: "function" as const,
     function: {
-      name: "get_destination_guide",
-      description:
-        "Load the local destination guide (summary, areas, day plan, visa note). Never invent beyond this JSON.",
+      name: tool.name,
+      description: tool.description,
       parameters: {
         type: "object",
-        properties: {
-          query: { type: "string", description: "Country or city, e.g. Jepang, Bali, Singapore" },
-        },
+        properties: Object.fromEntries(
+          (tool.parameters ?? []).map((param) => [
+            param.name,
+            {
+              type: param.type,
+              ...(param.description ? { description: param.description } : {}),
+            },
+          ]),
+        ),
       },
     },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "search_flights",
-      description:
-        "Search flights for the itinerary. Return airline, flight number, and times only. Never a fare.",
-      parameters: {
-        type: "object",
-        properties: {
-          origin: { type: "string" },
-          destination: { type: "string" },
-          limit: { type: "integer" },
-        },
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "search_hotels",
-      description: "After a flight is picked, name places to stay. Return name and area only. Never a rate.",
-      parameters: {
-        type: "object",
-        properties: {
-          city: { type: "string" },
-          preferCheaper: { type: "boolean" },
-          limit: { type: "integer" },
-        },
-      },
-    },
-  },
-  {
-    type: "function" as const,
-    function: {
-      name: "plan_notifications",
-      description:
-        "Build the in-app reminder schedule after the traveler locks an option. Use only returned titles and offsets.",
-      parameters: {
-        type: "object",
-        properties: {
-          departDate: { type: "string" },
-          destination: { type: "string" },
-        },
-      },
-    },
-  },
-];
+  }));
+}

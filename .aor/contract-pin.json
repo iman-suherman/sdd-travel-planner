@@ -1,0 +1,14 @@
+{
+  "vibe": "contracts/vibe.md",
+  "pack": "contracts/packs/tripspec-nl.baseline.json",
+  "schema": "contracts/capability/capability-pack.schema.json",
+  "pack_id": "tripspec-nl",
+  "version": "2026-09-19.3",
+  "tools": [
+    "get_destination_guide",
+    "search_flights",
+    "search_hotels",
+    "plan_notifications"
+  ],
+  "generated_at": "2026-09-18T22:39:55Z"
+}

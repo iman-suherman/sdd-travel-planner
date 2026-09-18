@@ -6,7 +6,14 @@ import styles from "./chat.module.css";
 type Msg = {
   role: "user" | "assistant";
   content: string;
-  tools?: Array<{ name: string; summary: string }>;
+  tools?: Array<{
+    name: string;
+    summary: string;
+    meaning?: string;
+    when?: string;
+    spec?: string;
+    href?: string;
+  }>;
 };
 
 const STARTERS = [
@@ -15,6 +22,29 @@ const STARTERS = [
   "Yang nomor 2, sekalian hotel",
   "Kunci opsi 2 dan ingatkan aku sebelum berangkat",
 ];
+
+type Phase = "thinking" | "typing" | null;
+
+type SpecLink = { name: string; spec: string; href: string };
+
+type DoneMeta = {
+  model?: string;
+  packVersion?: string;
+  usedTemplateFallback?: boolean;
+  trainingResults?: string;
+  trainingResultsHref?: string;
+  catalog?: SpecLink[];
+  tools?: Msg["tools"];
+};
+
+type Footer = {
+  model?: string;
+  packVersion?: string;
+  trainingResults?: string;
+  trainingResultsHref?: string;
+  usedTemplateFallback?: boolean;
+  catalog?: SpecLink[];
+};
 
 export function ChatApp() {
   const [messages, setMessages] = useState<Msg[]>([
@@ -25,13 +55,15 @@ export function ChatApp() {
     },
   ]);
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [meta, setMeta] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>(null);
+  const [meta, setMeta] = useState<Footer | null>(null);
+  const [openTool, setOpenTool] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const busy = phase !== null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, busy]);
+  }, [messages, phase]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -40,62 +72,139 @@ export function ChatApp() {
     const next: Msg[] = [...messages, { role: "user", content: trimmed }];
     setMessages(next);
     setInput("");
-    setBusy(true);
+    setPhase("thinking");
     setMeta(null);
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({
           messages: next
             .filter((m) => m.role === "user" || m.role === "assistant")
             .map((m) => ({ role: m.role, content: m.content })),
         }),
       });
-      const data = (await res.json()) as {
-        reply?: string;
-        error?: string;
-        packVersion?: string;
-        model?: string;
-        usedTemplateFallback?: boolean;
-        trainingResults?: string;
-        tools?: Array<{ name: string; summary: string }>;
-      };
-      if (!res.ok) {
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            content: data.error ?? `Error ${res.status}`,
-          },
-        ]);
-      } else {
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: data.reply ?? "(kosong)", tools: data.tools },
-        ]);
-        setMeta(
-          [
-            data.model && `model ${data.model}`,
-            data.packVersion && `pack ${data.packVersion}`,
-            data.trainingResults && `results ${data.trainingResults}`,
-            data.usedTemplateFallback && "template fallback",
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        );
+      if (!res.ok || !res.body) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `Error ${res.status}`);
       }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let started = false;
+      const queue: string[] = [];
+      let kicking = false;
+      let streamDone = false;
+      let settle: (() => void) | null = null;
+
+      const append = (chunk: string) => {
+        const first = !started;
+        started = true;
+        setMessages((current) => {
+          const copy = [...current];
+          const last = copy[copy.length - 1];
+          if (first || last?.role !== "assistant") {
+            copy.push({ role: "assistant", content: chunk });
+          } else {
+            copy[copy.length - 1] = { ...last, content: last.content + chunk };
+          }
+          return copy;
+        });
+      };
+
+      const kick = () => {
+        if (kicking) return;
+        kicking = true;
+        const step = () => {
+          const ch = queue.shift();
+          if (!ch) {
+            kicking = false;
+            if (streamDone) settle?.();
+            return;
+          }
+          if (!started) setPhase("typing");
+          append(ch);
+          window.setTimeout(step, queue.length > 240 ? 8 : 18);
+        };
+        step();
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
+        for (const frame of frames) {
+          const event = frame.match(/^event: (.+)$/m)?.[1] ?? "message";
+          const dataLine = frame
+            .split("\n")
+            .filter((line) => line.startsWith("data: "))
+            .map((line) => line.slice(6))
+            .join("\n");
+          if (!dataLine) continue;
+          const data = JSON.parse(dataLine) as { text?: string; error?: string } & DoneMeta;
+          if (event === "error") {
+            throw new Error(data.error ?? "Stream error");
+          }
+          if (event === "delta" && data.text) {
+            queue.push(...data.text);
+            kick();
+          }
+          if (event === "done") {
+            const tools = data.tools;
+            const footer: Footer = {
+              model: data.model,
+              packVersion: data.packVersion,
+              trainingResults: data.trainingResults,
+              trainingResultsHref: data.trainingResultsHref,
+              usedTemplateFallback: data.usedTemplateFallback,
+              catalog: data.catalog,
+            };
+            const applyDone = () => {
+              setMessages((current) => {
+                const copy = [...current];
+                const last = copy[copy.length - 1];
+                if (last?.role === "assistant") {
+                  copy[copy.length - 1] = { ...last, tools };
+                }
+                return copy;
+              });
+              setMeta(footer);
+            };
+            if (!kicking && queue.length === 0) applyDone();
+            else {
+              const previous = settle;
+              settle = () => {
+                previous?.();
+                applyDone();
+              };
+            }
+          }
+        }
+      }
+
+      await new Promise<void>((resolve) => {
+        const previous = settle;
+        settle = () => {
+          previous?.();
+          resolve();
+        };
+        streamDone = true;
+        if (!kicking) settle();
+      });
     } catch (err) {
       setMessages((m) => [
         ...m,
         {
           role: "assistant",
-          content: `Gagal konek: ${err instanceof Error ? err.message : String(err)}`,
+          content: err instanceof Error ? err.message : String(err),
         },
       ]);
     } finally {
-      setBusy(false);
+      setPhase(null);
     }
   }
 
@@ -128,20 +237,51 @@ export function ChatApp() {
                 {m.content.split("\n").map((line, j) => (
                   <p key={j}>{renderInline(line)}</p>
                 ))}
+                {phase === "typing" && i === messages.length - 1 ? (
+                  <span className={styles.caret} />
+                ) : null}
                 {m.tools?.length ? (
-                  <p className={styles.tools}>
-                    {m.tools.map((t) => t.name).join(" · ")}
-                  </p>
+                  <div className={styles.tools}>
+                    {m.tools.map((t) => {
+                      const key = `${i}-${t.name}`;
+                      const open = openTool === key;
+                      return (
+                        <div key={t.name} className={styles.toolWrap}>
+                          <a
+                            className={styles.tool}
+                            href={t.href ?? "#"}
+                            aria-expanded={open}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              setOpenTool(open ? null : key);
+                              if (t.href) window.open(t.href);
+                            }}
+                          >
+                            {t.name}
+                          </a>
+                          {open ? (
+                            <div className={styles.toolNote}>
+                              <p>{t.meaning ?? t.summary}</p>
+                              {t.when ? <p className={styles.toolWhen}>{t.when}</p> : null}
+                              {t.href && t.spec ? (
+                                <a className={styles.toolLink} href={t.href}>
+                                  {t.spec}
+                                </a>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : null}
               </div>
             </div>
           ))}
-          {busy && (
+          {phase === "thinking" && (
             <div className={styles.bot}>
               <span className={styles.role}>TripSpec</span>
-              <div className={`${styles.bubble} ${styles.typing}`}>
-                ngetik…
-              </div>
+              <div className={`${styles.bubble} ${styles.thinking}`}>Berpikir…</div>
             </div>
           )}
           <div ref={bottomRef} />
@@ -173,7 +313,32 @@ export function ChatApp() {
             Kirim
           </button>
         </form>
-        {meta && <p className={styles.meta}>{meta}</p>}
+        {meta && (
+          <p className={styles.meta}>
+            {[
+              meta.model && `model ${meta.model}`,
+              meta.packVersion && `pack ${meta.packVersion}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            {meta.trainingResultsHref ? (
+              <>
+                {" · "}
+                <a href={meta.trainingResultsHref}>results {meta.trainingResults}</a>
+              </>
+            ) : null}
+            {meta.usedTemplateFallback ? " · template fallback" : null}
+            {meta.catalog?.length ? (
+              <span className={styles.metaSpecs}>
+                {meta.catalog.map((tool) => (
+                  <a key={tool.name} href={tool.href} title={tool.name}>
+                    {tool.spec}
+                  </a>
+                ))}
+              </span>
+            ) : null}
+          </p>
+        )}
       </main>
     </div>
   );

@@ -145,17 +145,97 @@
 }
 
 .tools {
-  margin-top: 0.6rem;
+  margin-top: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.toolWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.tool {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--sand-dim);
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
   font-size: 0.68rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tool:hover {
+  border-color: var(--accent-dim);
+  color: var(--sand);
+}
+
+.toolNote {
+  max-width: 28rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--sand);
+  font-size: 0.78rem;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.4;
+}
+
+.toolNote p {
+  margin: 0 0 0.3rem;
+}
+
+.toolWhen {
   color: var(--sand-dim);
+}
+
+.toolLink {
+  color: var(--accent);
+  font-size: 0.72rem;
+  word-break: break-all;
 }
 
 .typing {
   color: var(--sand-dim);
   font-style: italic;
+}
+
+.thinking {
+  color: var(--sand-dim);
+}
+
+.thinking::after {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-left: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
   animation: pulse 1.2s ease-in-out infinite;
+  vertical-align: middle;
+}
+
+.caret::after {
+  content: "▍";
+  margin-left: 1px;
+  color: var(--accent);
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }
 
 @keyframes pulse {
@@ -240,6 +320,23 @@
   margin: 0;
   font-size: 0.72rem;
   color: var(--sand-dim);
+  line-height: 1.45;
+}
+
+.meta a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.meta a:hover {
+  text-decoration: underline;
+}
+
+.metaSpecs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.35rem;
 }
 
 @media (max-width: 520px) {

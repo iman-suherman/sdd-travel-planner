@@ -2,6 +2,22 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+export type PackTool = {
+  name: string;
+  meaning: string;
+  description: string;
+  when: string;
+  /** Repo-relative markdown the generator writes. */
+  spec?: string;
+  parameters?: Array<{ name: string; type: string; description?: string }>;
+  invoke?: {
+    match?: string;
+    unless?: string;
+    require?: Array<"origin" | "place" | "date">;
+    arguments?: Record<string, string | number | boolean>;
+  };
+};
+
 export type CapabilityPack = {
   pack_id: string;
   version: string;
@@ -28,11 +44,21 @@ export type CapabilityPack = {
       good: Array<{ user: string; assistant: string; why?: string }>;
       bad: Array<{ user: string; assistant: string; why?: string }>;
     };
-    tools?: { allowed?: string[] };
+    tools?: {
+      allowed?: string[];
+      resolve?: {
+        default_place?: string;
+        date?: string;
+        cheaper?: string;
+        places?: Array<{ value: string; match: string }>;
+        origins?: Array<{ value: string; match: string }>;
+      };
+      catalog?: PackTool[];
+    };
   };
 };
 
-function repoRoot(): string {
+export function repoRoot(): string {
   const fromModule = join(dirname(fileURLToPath(import.meta.url)), "../..");
   const candidates = [
     process.env.TRIPSPEC_ROOT,
@@ -42,7 +68,7 @@ function repoRoot(): string {
   ].filter(Boolean) as string[];
 
   for (const c of candidates) {
-    if (existsSync(join(c, "contracts/packs/tripspec-nl.baseline.json"))) {
+    if (existsSync(join(c, "contracts/vibe.md"))) {
       return c;
     }
   }
@@ -138,8 +164,14 @@ export function composeSystemPrompt(
   }
 
   lines.push("");
+  const names =
+    pack.modules.tools?.catalog?.map((tool) => tool.name) ??
+    pack.modules.tools?.allowed ??
+    [];
   lines.push(
-    "When you need live inventory, call tools search_flights or search_hotels. Never invent tool results.",
+    names.length
+      ? `When you need inventory, call only these tools: ${names.join(", ")}. Never invent tool results.`
+      : "When you need live inventory, call tools search_flights or search_hotels. Never invent tool results.",
   );
 
   return lines.join("\n");

@@ -24,7 +24,7 @@ else
 fi
 
 echo "==> Generating specs into specs/ (not committed)"
-bash "$ROOT/scripts/train-aor.sh"
+bash "$ROOT/scripts/generate-specs.sh"
 if [[ -f "$ROOT/specs/training/results/latest.md" ]]; then
   echo "    Chatbot will use specs/training/results/latest.md"
 else

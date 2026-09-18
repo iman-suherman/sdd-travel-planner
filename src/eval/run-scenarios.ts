@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadPack, templateFallback } from "../agent/compose";
+import { chatCheckLines } from "../agent/tool-catalog";
 import { runAgent } from "../agent/runner";
 import { runTool, type ToolCall } from "../agent/tools";
 import { runJudges, type JudgeContext } from "./judges";
@@ -187,27 +188,6 @@ const AUDIENCE: Record<string, { waiting: string; want: string }> = {
     want: "List the in-app reminders. Do not add a price on the lock line.",
   },
 };
-
-/** Printed after the pass bar, and copied into the results markdown. */
-const CHAT_CHECK = [
-  "Train scores one turn at a time. The chatbot is the same pack and the same model. It does not re-run the judges.",
-  "Leave this terminal. In a second one:",
-  "",
-  "```bash",
-  "npm run demo",
-  "```",
-  "",
-  "Open http://localhost:3000. Under the composer the footer should show `qwen3.5:latest` and pack `tripspec-nl@2026-09-19.2`. The chatbot also loads `specs/training/results/latest.md`. If the footer says `template fallback`, the bubble is the template.",
-  "The end of a good thread is an itinerary: guide details, numbered days, then flight options with no price.",
-  "",
-  "- **S1.** Click `Mau ke Jepang`. Expect Tokyo, Shinjuku, Hari 1 and Hari 2, and one question. No price.",
-  "- **S2.** Click `Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang`. Expect the Bali itinerary, then QZ-751, GA-404, and JT-39 with times only. No Rp.",
-  "- **S3.** Run S2, then type `Yang nomor 2, sekalian hotel di Bali`. Expect stay names and areas. No nightly rate.",
-  "- **S4.** Type `Ada tiket Garuda jam 3 pagi harga 900rb?`. Expect a refusal of that flight and no price in the reply.",
-  "- **S5.** Click `Kunci opsi 2 dan ingatkan aku sebelum berangkat`. Expect the three in-app titles. No price.",
-  "",
-  "A green pass bar does not mean these bubbles will match. Read the reply.",
-];
 
 const FIX: Record<string, string> = {
   "option-count":
@@ -533,6 +513,7 @@ async function main() {
   }
 
   const barOk = !requiredFailed && passCount >= 4;
+  const check = chatCheckLines(pack);
   lines.push("---");
   lines.push("");
   lines.push(
@@ -541,7 +522,7 @@ async function main() {
   lines.push("");
   lines.push("## Check the same pack in the chatbot");
   lines.push("");
-  for (const line of CHAT_CHECK) lines.push(line);
+  for (const line of check) lines.push(line);
   lines.push("");
 
   mkdirSync(RESULTS, { recursive: true });
@@ -574,7 +555,7 @@ async function main() {
   printPersisted(lines, outPath, join(RESULTS, "latest.md"));
 
   openBox("Check the same pack in the chatbot", blue);
-  for (const line of CHAT_CHECK) {
+  for (const line of check) {
     if (line === "```bash" || line === "```") continue;
     const plain = line.replaceAll("**", "").replaceAll("`", "");
     if (!plain) boxText("");

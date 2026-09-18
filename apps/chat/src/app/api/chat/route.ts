@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadLatestTrainingReport } from "@tripspec/agent/compose";
+import { loadLatestTrainingReport, loadPack } from "@tripspec/agent/compose";
+import { inferForceTools, toolSpecRel } from "@tripspec/agent/tool-catalog";
 import { runAgent } from "@tripspec/agent/runner";
 import { runTool } from "@tripspec/agent/tools";
+import { cursorFileHref, generateToolSpecs } from "@tripspec/specs/generate-tool-specs";
 
 export const runtime = "nodejs";
 
@@ -9,71 +11,23 @@ type Body = {
   messages?: Array<{ role: "user" | "assistant"; content: string }>;
 };
 
-function placeQuery(text: string): string {
-  const t = text.toLowerCase();
-  if (/jepang|japan|tokyo|nrt|shinjuku/.test(t)) return "Tokyo";
-  if (/singap/.test(t)) return "Singapore";
-  if (/bali|denpasar|dps|kuta|ubud/.test(t)) return "Bali";
-  return "";
-}
-
-function inferForceTools(
-  history: string,
-  lastUser: string,
-): Array<{
-  name:
-    | "get_destination_guide"
-    | "search_flights"
-    | "search_hotels"
-    | "plan_notifications";
-  arguments: Record<string, unknown>;
-}> {
-  const t = lastUser.toLowerCase();
-  const place = placeQuery(`${history}\n${lastUser}`) || "Bali";
-  const tools: Array<{
-    name:
-      | "get_destination_guide"
-      | "search_flights"
-      | "search_hotels"
-      | "plan_notifications";
-    arguments: Record<string, unknown>;
-  }> = [];
-
-  if (/kunci|ingatkan|pengingat|notifikasi/.test(t)) {
-    tools.push({
-      name: "plan_notifications",
-      arguments: { destination: place, departDate: "" },
-    });
-  }
-  if (/hotel/.test(t)) {
-    tools.push({
-      name: "search_hotels",
-      arguments: { city: place, preferCheaper: /murah|nomor 2|lebih murah/.test(t), limit: 3 },
-    });
-  }
-  if (/bali|jepang|japan|tokyo|singap|denpasar|liburan|mau ke/.test(t)) {
-    tools.push({
-      name: "get_destination_guide",
-      arguments: { query: placeQuery(lastUser) || place },
-    });
-  }
-  const ready =
-    /(jakarta|cgk|surabaya)/.test(t) &&
-    Boolean(placeQuery(lastUser) || placeQuery(history)) &&
-    /(oktober|okt|tanggal|januari|februari|maret|april|mei|juni|juli|agustus|september|november|desember|\d{1,2})/.test(
-      t,
-    );
-  if (ready && !/900rb|jam 3 pagi/.test(t)) {
-    tools.push({
-      name: "search_flights",
-      arguments: {
-        origin: /surabaya/.test(t) ? "Surabaya" : "Jakarta",
-        destination: placeQuery(lastUser) || place,
-        limit: 3,
-      },
-    });
-  }
-  return tools;
+function decorateTools(
+  tools: Array<{ name: string; summary: string }>,
+) {
+  const pack = loadPack();
+  const catalog = pack.modules.tools?.catalog ?? [];
+  return tools.map((tool) => {
+    const spec = catalog.find((item) => item.name === tool.name);
+    const file = spec ? toolSpecRel(spec) : undefined;
+    return {
+      name: tool.name,
+      summary: tool.summary,
+      meaning: spec?.meaning,
+      when: spec?.when,
+      spec: file,
+      href: file ? cursorFileHref(file) : undefined,
+    };
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -93,44 +47,76 @@ export async function POST(req: NextRequest) {
 
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const history = messages.map((m) => m.content).join("\n");
-  const forceTools = lastUser ? inferForceTools(history, lastUser.content) : [];
-  const training = loadLatestTrainingReport();
-  if (!training) {
-    return NextResponse.json(
-      {
-        error:
-          "Belum ada hasil training. Jalankan npm run train. Chatbot demo hanya memakai specs/training/results/latest.md.",
-      },
-      { status: 409 },
-    );
-  }
+  const pack = loadPack();
+  generateToolSpecs(pack);
+  const forceTools = lastUser ? inferForceTools(pack, history, lastUser.content) : [];
 
-  try {
-    const result = await runAgent({
-      messages,
-      forceTools,
-      useTrainingResults: true,
-    });
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`),
+        );
+      };
 
-    const toolPreview = forceTools.map((c) => runTool(c));
+      send("status", { phase: "thinking" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
-    return NextResponse.json({
-      reply: result.reply,
-      model: result.model,
-      packVersion: result.packVersion,
-      usedTemplateFallback: result.usedTemplateFallback,
-      trainingResults: "specs/training/results/latest.md",
-      tools: (result.toolResults.length ? result.toolResults : toolPreview).map(
-        (t) => ({ name: t.name, summary: t.summary }),
-      ),
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      {
-        error: `Ollama/agent error: ${message}. Cek OLLAMA_BASE_URL dan model (${process.env.OLLAMA_CHAT_MODEL ?? "qwen3.5:latest"}).`,
-      },
-      { status: 502 },
-    );
-  }
+      const training = loadLatestTrainingReport();
+      if (!training) {
+        send("error", {
+          error:
+            "Belum ada hasil training. Jalankan npm run train. Chatbot demo hanya memakai specs/training/results/latest.md.",
+        });
+        controller.close();
+        return;
+      }
+
+      try {
+        const result = await runAgent({
+          messages,
+          forceTools,
+          useTrainingResults: true,
+        });
+        const reply = result.reply || "(kosong)";
+        const toolPreview = forceTools.map((c) => runTool(c));
+        for (const ch of reply) {
+          send("delta", { text: ch });
+        }
+        send("done", {
+          model: result.model,
+          packVersion: result.packVersion,
+          usedTemplateFallback: result.usedTemplateFallback,
+          trainingResults: "specs/training/results/latest.md",
+          trainingResultsHref: cursorFileHref("specs/training/results/latest.md"),
+          catalog: (pack.modules.tools?.catalog ?? []).map((tool) => {
+            const spec = toolSpecRel(tool);
+            return { name: tool.name, spec, href: cursorFileHref(spec) };
+          }),
+          tools: decorateTools(
+            (result.toolResults.length ? result.toolResults : toolPreview).map((t) => ({
+              name: t.name,
+              summary: t.summary,
+            })),
+          ),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        send("error", {
+          error: `Ollama/agent error: ${message}. Cek OLLAMA_BASE_URL dan model (${process.env.OLLAMA_CHAT_MODEL ?? "qwen3.5:latest"}).`,
+        });
+      }
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }
