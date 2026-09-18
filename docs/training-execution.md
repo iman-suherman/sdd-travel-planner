@@ -13,17 +13,13 @@ Two commands, two different jobs. Do not describe them as one step.
 | Layer | A — Agent On Rails shape | B — behaviour |
 | Input | `product/requirements.md` | `contracts/packs/tripspec-nl.baseline.json` and S1–S5 |
 | Does | BRIEF → PRD → architecture → `aor gather` → a draft `specs/training/` | Loads the pack, calls tools, asks the model (or a canned reply), runs judges, writes a report |
-| Writes | `.aor/generated-control-plane/` (gitignored) and `.aor/aor-pin.json` | `specs/training/results/<timestamp>.md` and `results/latest.md` |
-| Changes replies? | No | Only after you edit the SPEC or the pack and re-run |
+| Writes | `specs/` (gitignored) and `.aor/aor-pin.json` | `specs/training/results/<timestamp>.md` and `results/latest.md` |
+| Changes replies? | The next demo reads the generated specs. The chatbot itself reads the train report. | The chatbot imitates `latest.md` on the next chat. |
 | Pinned control plane | `42ea059` on `agent-on-rails-control-plane` | — |
 
-Layer A follows `guides/chatbot-training-orchestration.md` (discovery order of AOR-011, gather of AOR-010). The drafts it writes are not the workshop source of truth. The source of truth is:
+Layer A follows `guides/chatbot-training-orchestration.md` (discovery order of AOR-011, gather of AOR-010). Specs are not in git. `npm run demo` generates `specs/` from `product/requirements.md`. The chatbot does not read those files. It reads `specs/training/results/latest.md`, which `npm run train` writes. The pack in `contracts/packs/tripspec-nl.baseline.json` is still what the eval scores.
 
-- `specs/SPEC-001-trip-intake.md` through `specs/SPEC-005-notify-plan.md`
-- `contracts/packs/tripspec-nl.baseline.json`
-- `specs/training/scenarios.md`
-
-`src/agent/compose.ts` builds the system prompt from the pack only. There is no second prompt in the runner.
+`src/agent/compose.ts` builds the system prompt from the pack. The chat route also appends the persisted train report. `npm run train` does not, so the score stays independent of the previous report.
 
 The model default is `qwen3.5:latest` (`OLLAMA_CHAT_MODEL`, pulled with `npm run pull`). Training does not update that file.
 

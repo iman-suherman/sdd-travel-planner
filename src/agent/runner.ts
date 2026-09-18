@@ -1,5 +1,6 @@
 import {
   composeSystemPrompt,
+  loadLatestTrainingReport,
   loadPack,
   templateFallback,
   type CapabilityPack,
@@ -34,6 +35,8 @@ export type RunOptions = {
   maxToolRounds?: number;
   /** Line-oriented trace for `npm run train`. Omitted by the chat UI. */
   onTrace?: (line: string) => void;
+  /** Chat demo only. Eval must leave this false so the score does not depend on a previous report. */
+  useTrainingResults?: boolean;
 };
 
 export type RunResult = {
@@ -42,6 +45,7 @@ export type RunResult = {
   toolResults: ToolResult[];
   model: string;
   packVersion: string;
+  trainingResultsPath: string | null;
 };
 
 function env(name: string, fallback: string): string {
@@ -95,6 +99,159 @@ function isUngrounded(reply: string, toolResults: ToolResult[]): boolean {
   return false;
 }
 
+const TOOL_MEANING: Record<string, string> = {
+  get_destination_guide:
+    "Local guide only. Jepang maps to Tokyo. Returns areas, day plan, visa note. No fare and no web search.",
+  search_flights:
+    "Mock flights in src/inventory/mock-data.ts. Returns flight number, time, and price. Does not book.",
+  search_hotels:
+    "Mock hotels for that city. Returns name, area, and nightly rate. Does not book.",
+  plan_notifications:
+    "In-app reminders only (14 days, 7 days, 1 day). No email, WhatsApp, SMS, or push.",
+};
+
+function previewSystem(content: string): string[] {
+  const all = content.split("\n");
+  const out: string[] = [];
+  for (const line of all.slice(0, 6)) {
+    if (line.trim()) out.push(line);
+  }
+  if (all.length > 6) {
+    out.push(
+      `… ${all.length - 6} more lines in this system message (hard rules, few-shot). Composed from the pack, not a second prompt in code.`,
+    );
+  }
+  const factAt = all.findIndex((line) => line.startsWith("GROUNDED FACTS"));
+  if (factAt >= 0) {
+    out.push(
+      "GROUNDED FACTS are this turn's inventory JSON. A price is allowed only if it appears here.",
+    );
+    const facts = all.slice(factAt, factAt + 18);
+    for (const line of facts) out.push(line.length > 160 ? `${line.slice(0, 160)}…` : line);
+    const hidden = all.length - factAt - facts.length;
+    if (hidden > 0) out.push(`… ${hidden} more fact lines`);
+  }
+  return out;
+}
+
+function tracePayload(
+  url: string,
+  apiKey: string | undefined,
+  body: Record<string, unknown>,
+  onTrace: (line: string) => void,
+) {
+  const messages = (body.messages as ChatMessage[] | undefined) ?? [];
+  const tools =
+    (body.tools as Array<{ function?: { name?: string; description?: string } }> | undefined) ??
+    [];
+  onTrace(`   API  POST ${url}`);
+  onTrace("   Payload  JSON body of that POST. This is the whole request the model sees.");
+  onTrace(`   Payload  model ${String(body.model)}`);
+  onTrace(`   Payload  temperature ${String(body.temperature ?? "default")}`);
+  onTrace(
+    "   Payload  stream false (field omitted). Ollama keeps the connection open and returns one JSON when generation finishes. Tokens are not printed as they are chosen.",
+  );
+  onTrace(
+    apiKey
+      ? "   Payload  header Authorization Bearer (key not printed)"
+      : "   Payload  header Content-Type application/json. No API key.",
+  );
+  messages.forEach((message, index) => {
+    const calls = message.tool_calls?.map((call) => call.function.name).join(", ");
+    onTrace(
+      `   Payload  messages[${index}] ${message.role}  ${(message.content ?? "").length} chars${calls ? `  tool_calls ${calls}` : ""}`,
+    );
+    const lines =
+      message.role === "system"
+        ? previewSystem(message.content ?? "")
+        : [(message.content ?? "").replace(/\s+/g, " ").trim()].filter(Boolean);
+    for (const line of lines) {
+      const shown = line.length > 220 ? `${line.slice(0, 220)}…` : line;
+      onTrace(`   Payload  | ${shown}`);
+    }
+  });
+  onTrace(
+    "   Tools  the tools array is a menu of functions, not a result. If the model returns tool_calls, this process runs them on the local inventory and POSTs again. They are not HTTP calls to an airline.",
+  );
+  for (const tool of tools) {
+    const name = tool.function?.name ?? "unknown";
+    onTrace(`   Tools  ${name} — ${TOOL_MEANING[name] ?? tool.function?.description ?? "offered to the model"}`);
+  }
+  onTrace(
+    "   Wait  under the hood: fetch() blocks this script. The scenario does not score, and the next scenario does not start, until this response arrives.",
+  );
+  onTrace(
+    "   Wait  Ollama reads the local GGUF for this model, samples the next token, appends it, and repeats. The file on disk is not rewritten. This is not training.",
+  );
+  onTrace("   waiting for Ollama…");
+}
+
+function formatBytes(n: number): string {
+  if (!n) return "size unknown";
+  const gb = n / 1024 ** 3;
+  if (gb >= 0.1) return `${gb.toFixed(1)} GB`;
+  return `${Math.round(n / 1024 ** 2)} MB`;
+}
+
+function startOllamaWatch(
+  baseUrl: string,
+  model: string,
+  onTrace?: (line: string) => void,
+): () => void {
+  if (!onTrace) return () => {};
+  const url = `${baseUrl.replace(/\/$/, "")}/api/ps`;
+  let stopped = false;
+  let last = "";
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
+      if (!res.ok) {
+        const line = `   Ollama now  GET ${url} returned HTTP ${res.status}. The chat POST is still running.`;
+        if (line !== last) {
+          last = line;
+          onTrace(line);
+        }
+        return;
+      }
+      const data = (await res.json()) as {
+        models?: Array<{
+          name?: string;
+          model?: string;
+          size?: number;
+          size_vram?: number;
+          context_length?: number;
+          details?: { parameter_size?: string; quantization_level?: string };
+        }>;
+      };
+      const models = data.models ?? [];
+      const stem = model.split(":")[0];
+      const hit =
+        models.find((item) => (item.name ?? item.model ?? "").includes(stem)) ?? models[0];
+      const line = hit
+        ? `   Ollama now  ${hit.name ?? hit.model ?? model} is in memory (${formatBytes(hit.size_vram || hit.size || 0)}${hit.details?.parameter_size ? `, ${hit.details.parameter_size}` : ""}${hit.details?.quantization_level ? ` ${hit.details.quantization_level}` : ""}${hit.context_length ? `, context ${hit.context_length}` : ""}). It is on the token loop for this POST.`
+        : `   Ollama now  GET ${url} shows no model yet. It is loading the GGUF into memory, then the token loop starts.`;
+      if (line !== last) {
+        last = line;
+        onTrace(line);
+      }
+    } catch {
+      const line = `   Ollama now  could not read ${url}. The POST is still in flight. Silence here is generation, not a hang.`;
+      if (line !== last) {
+        last = line;
+        onTrace(line);
+      }
+    }
+  };
+  const first = setTimeout(() => void tick(), 600);
+  const timer = setInterval(() => void tick(), 4000);
+  return () => {
+    stopped = true;
+    clearTimeout(first);
+    clearInterval(timer);
+  };
+}
+
 async function ollamaChat(
   baseUrl: string,
   apiKey: string | undefined,
@@ -112,43 +269,35 @@ async function ollamaChat(
   };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
-  const messages = (body.messages as ChatMessage[] | undefined) ?? [];
-  const tools = (body.tools as Array<{ function?: { name?: string } }> | undefined) ?? [];
-  onTrace?.(`   API  POST ${url}`);
-  onTrace?.(
-    `        model ${String(body.model)}  temperature ${String(body.temperature ?? "default")}`,
-  );
-  onTrace?.(
-    `        messages ${messages.length} (${messages.map((m) => m.role).join(", ") || "none"})`,
-  );
-  onTrace?.(
-    `        tools ${tools.map((t) => t.function?.name).filter(Boolean).join(", ") || "none"}`,
-  );
-  if (apiKey) onTrace?.("        auth Bearer (key not printed)");
-  onTrace?.("        waiting for Ollama…");
+  if (onTrace) tracePayload(url, apiKey, body, onTrace);
+  const stopWatch = startOllamaWatch(baseUrl, String(body.model ?? ""), onTrace);
 
   const started = Date.now();
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-  const elapsed = ((Date.now() - started) / 1000).toFixed(1);
-  if (!res.ok) {
-    const text = await res.text();
-    onTrace?.(`        ← HTTP ${res.status} in ${elapsed}s`);
-    throw new Error(`Ollama chat failed (${res.status}): ${text.slice(0, 400)}`);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+    if (!res.ok) {
+      const text = await res.text();
+      onTrace?.(`        ← HTTP ${res.status} in ${elapsed}s`);
+      throw new Error(`Ollama chat failed (${res.status}): ${text.slice(0, 400)}`);
+    }
+    const data = (await res.json()) as {
+      message?: ChatMessage;
+      choices?: Array<{ message: ChatMessage }>;
+    };
+    const msg = data.choices?.[0]?.message ?? data.message;
+    const calls = msg?.tool_calls?.map((t) => t.function.name).join(", ");
+    onTrace?.(
+      `        ← HTTP ${res.status} in ${elapsed}s  ${calls ? `tool_calls ${calls}` : `reply ${(msg?.content ?? "").trim().length} chars`}`,
+    );
+    return data;
+  } finally {
+    stopWatch();
   }
-  const data = (await res.json()) as {
-    message?: ChatMessage;
-    choices?: Array<{ message: ChatMessage }>;
-  };
-  const msg = data.choices?.[0]?.message ?? data.message;
-  const calls = msg?.tool_calls?.map((t) => t.function.name).join(", ");
-  onTrace?.(
-    `        ← HTTP ${res.status} in ${elapsed}s  ${calls ? `tool_calls ${calls}` : `reply ${ (msg?.content ?? "").trim().length } chars`}`,
-  );
-  return data;
 }
 
 function assistantMessage(data: Awaited<ReturnType<typeof ollamaChat>>): ChatMessage {
@@ -174,6 +323,8 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
       toolResults.push(result);
       const arg = JSON.stringify(call.arguments);
       trace?.(`        ${call.name} ${arg} → ${result.ok ? "ok" : "empty"}`);
+      const meaning = TOOL_MEANING[call.name];
+      if (meaning) trace?.(`   Tools  ${call.name} — ${meaning}`);
     }
   } else {
     trace?.("   Local tools: none for this scenario.");
@@ -187,7 +338,24 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
       )
     : undefined;
 
-  const system = composeSystemPrompt(pack, factsPayload);
+  let trainingResultsPath: string | null = null;
+  let trainingText: string | undefined;
+  if (opts.useTrainingResults) {
+    const report = loadLatestTrainingReport();
+    if (!report) {
+      throw new Error(
+        "No persisted training results at specs/training/results/latest.md. Run npm run train before the chatbot demo.",
+      );
+    }
+    trainingResultsPath = report.path;
+    trainingText = report.text;
+    trace?.(
+      "   Training results  chatbot is using the saved report. npm run train does not load this file.",
+    );
+    trace?.(`   Training results  ${report.path}`);
+  }
+
+  const system = composeSystemPrompt(pack, factsPayload, trainingText);
   const messages: ChatMessage[] = [
     { role: "system", content: system },
     ...opts.messages.map((m) => ({ role: m.role, content: m.content })),
@@ -318,5 +486,6 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
     toolResults,
     model,
     packVersion: pack.version,
+    trainingResultsPath,
   };
 }

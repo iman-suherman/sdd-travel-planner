@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { loadLatestTrainingReport } from "@tripspec/agent/compose";
 import { runAgent } from "@tripspec/agent/runner";
 import { runTool } from "@tripspec/agent/tools";
 
@@ -93,11 +94,22 @@ export async function POST(req: NextRequest) {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   const history = messages.map((m) => m.content).join("\n");
   const forceTools = lastUser ? inferForceTools(history, lastUser.content) : [];
+  const training = loadLatestTrainingReport();
+  if (!training) {
+    return NextResponse.json(
+      {
+        error:
+          "Belum ada hasil training. Jalankan npm run train. Chatbot demo hanya memakai specs/training/results/latest.md.",
+      },
+      { status: 409 },
+    );
+  }
 
   try {
     const result = await runAgent({
       messages,
       forceTools,
+      useTrainingResults: true,
     });
 
     const toolPreview = forceTools.map((c) => runTool(c));
@@ -107,6 +119,7 @@ export async function POST(req: NextRequest) {
       model: result.model,
       packVersion: result.packVersion,
       usedTemplateFallback: result.usedTemplateFallback,
+      trainingResults: "specs/training/results/latest.md",
       tools: (result.toolResults.length ? result.toolResults : toolPreview).map(
         (t) => ({ name: t.name, summary: t.summary }),
       ),

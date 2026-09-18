@@ -24,12 +24,12 @@ cp .env.example .env   # optional
 npm install
 npm install --prefix apps/chat
 
-# Pull latest Qwen for Ollama, then train / demo
 npm run pull                 # ollama pull qwen3.5:latest
-npm run train:aor            # Agent On Rails chatbot-training orchestration (latest control-plane)
-npm run train                # behavioural S1–S5 judges (mock/live)
-npm run demo                 # Chat UI :3000 (auto-pulls model if missing)
+npm run demo                 # generates specs/, then chat UI :3000
+npm run train                # writes specs/training/results/latest.md, which the chatbot reads
 ```
+
+`specs/` is not in git. `npm run demo` generates it from `product/requirements.md`. The chatbot will not answer until `npm run train` has written `specs/training/results/latest.md`.
 
 Env:
 

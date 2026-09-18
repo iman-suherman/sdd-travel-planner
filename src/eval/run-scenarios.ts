@@ -325,14 +325,39 @@ function closeBox(color = boxColor) {
 function printTrace(line: string) {
   const text = line.trim();
   if (!text) return;
-  if (text.startsWith("API")) boxText(text, blue + bold);
+  if (text.startsWith("API") || text.startsWith("Payload")) boxText(text, blue + bold);
   else if (text.startsWith("←")) boxText(text, /HTTP 2/.test(text) ? green : red + bold);
-  else if (text.startsWith("waiting")) boxText(text, yellow + bold);
-  else if (text.startsWith("Local tools")) boxText(text, magenta + bold);
+  else if (text.startsWith("waiting") || text.startsWith("Wait")) boxText(text, yellow + bold);
+  else if (text.startsWith("Ollama now")) boxText(text, green);
+  else if (text.startsWith("Local tools") || text.startsWith("Tools")) boxText(text, magenta + bold);
   else if (text.startsWith("Chat round")) boxText(text, cyan + bold);
   else if (text.includes("→ empty")) boxText(text, red);
   else if (text.includes("→")) boxText(text, magenta);
   else boxText(text, dim);
+}
+
+function printPersisted(report: string[], outPath: string, latestPath: string) {
+  openBox("Persisted results  not a new model", cyan);
+  boxText(
+    "Ollama did not save weights. These two files are the same report. They are local and gitignored.",
+    yellow,
+  );
+  boxText(outPath, bold);
+  boxText(latestPath, bold);
+  boxText("");
+  const end = report.findIndex((line) => line.startsWith("## Check the same pack"));
+  const body = end >= 0 ? report.slice(0, end) : report;
+  for (const line of body) {
+    const plain = line.replaceAll("**", "").replaceAll("`", "");
+    if (!plain.trim()) {
+      boxText("");
+      continue;
+    }
+    if (plain.startsWith("```")) continue;
+    const color = /\bFAIL\b/.test(plain) ? red + bold : /\bPASS\b/.test(plain) ? green : "";
+    boxText(plain, color);
+  }
+  closeBox(cyan);
 }
 
 function printIntro(opts: {
@@ -548,6 +573,8 @@ async function main() {
     );
   }
   closeBox(barOk ? green : red);
+
+  printPersisted(lines, outPath, join(RESULTS, "latest.md"));
 
   openBox("Check the same pack in the chatbot", blue);
   for (const line of CHAT_CHECK) {

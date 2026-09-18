@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run Agent On Rails chatbot-training orchestration (latest control-plane)
-# against TripSpec requirements. Writes drafts under .aor/ — does NOT overwrite
-# hand-authored specs/ or contracts/packs/ (workshop SoT).
+# against TripSpec requirements. Publishes generated specs into specs/.
+# Does not touch specs/training/results/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -64,7 +64,8 @@ mkdir -p "$(dirname "${REPORT}")"
   echo "- AOR control-plane: \`${FULL}\`"
   echo "- Guide: \`guides/chatbot-training-orchestration.md\`"
   echo "- Behaviour eval (this repo): \`npm run train\` → \`specs/training/results/\`"
-  echo "- Hand-authored SoT (do not replace blindly): \`specs/\`, \`contracts/packs/\`"
+  echo "- Generated specs (not committed): \`specs/\`"
+  echo "- Chatbot demo reads \`specs/training/results/latest.md\`"
 } >> "${REPORT}"
 
 # Mirror pin into local marker
@@ -80,6 +81,14 @@ cat > "${ROOT}/.aor/aor-pin.json" <<EOF
 EOF
 
 echo ""
-echo "==> AOR drafts ready under .aor/generated-control-plane/"
-echo "    Next: npm run train   # behavioural S1–S5 vs Ollama/mock"
-echo "    See:  specs/training/HOWTO-TRAINING.md"
+echo "==> Publish generated specs into specs/ (results/ is left alone)"
+mkdir -p "${ROOT}/specs/training/results"
+find "${ROOT}/specs" -type f \
+  ! -path "${ROOT}/specs/training/results/*" \
+  ! -name '.gitkeep' \
+  -delete
+rsync -a --exclude 'training/results/' "${OUT}/specs/" "${ROOT}/specs/"
+touch "${ROOT}/specs/.gitkeep" "${ROOT}/specs/training/results/.gitkeep"
+echo "    specs/ is gitignored. The chatbot reads specs/training/results/latest.md."
+echo "    Next: npm run train   # writes that report"
+echo "    Then: npm run demo"

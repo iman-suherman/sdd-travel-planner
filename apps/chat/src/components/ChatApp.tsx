@@ -58,6 +58,8 @@ export function ChatApp() {
         error?: string;
         packVersion?: string;
         model?: string;
+        usedTemplateFallback?: boolean;
+        trainingResults?: string;
         tools?: Array<{ name: string; summary: string }>;
       };
       if (!res.ok) {
@@ -77,6 +79,7 @@ export function ChatApp() {
           [
             data.model && `model ${data.model}`,
             data.packVersion && `pack ${data.packVersion}`,
+            data.trainingResults && `results ${data.trainingResults}`,
             data.usedTemplateFallback && "template fallback",
           ]
             .filter(Boolean)

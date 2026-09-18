@@ -58,13 +58,25 @@ export function loadPack(path = defaultPackPath()): CapabilityPack {
   return JSON.parse(raw) as CapabilityPack;
 }
 
+/** Latest `npm run train` report. The chatbot demo reads this. The eval does not. */
+export function loadLatestTrainingReport(): { path: string; text: string } | null {
+  const path = join(repoRoot(), "specs/training/results/latest.md");
+  if (!existsSync(path)) return null;
+  const raw = readFileSync(path, "utf8");
+  const text = raw.split(/^## Check the same pack/m)[0]?.trim();
+  if (!text) return null;
+  return { path, text };
+}
+
 /**
- * Build the Ollama system prompt **only** from the capability pack.
- * No competing mega-prompt in code.
+ * Build the system prompt from the capability pack.
+ * The chatbot demo may also append the persisted train report.
+ * `npm run train` does not pass that report.
  */
 export function composeSystemPrompt(
   pack: CapabilityPack,
   factsJson?: string,
+  trainingResults?: string,
 ): string {
   const { persona, reply_rules, few_shot } = pack.modules;
   const lines: string[] = [];
@@ -114,6 +126,15 @@ export function composeSystemPrompt(
     lines.push("");
     lines.push("GROUNDED FACTS (only source of prices/names/flightNos):");
     lines.push(factsJson);
+  }
+
+  if (trainingResults) {
+    lines.push("");
+    lines.push("PERSISTED TRAINING RESULTS");
+    lines.push(
+      "Saved by npm run train at specs/training/results/latest.md. Imitate replies marked PASS. Do not repeat a pattern the report marks FAIL. The GGUF was not updated.",
+    );
+    lines.push(trainingResults);
   }
 
   lines.push("");

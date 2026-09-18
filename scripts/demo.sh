@@ -23,6 +23,15 @@ else
   echo "    UI will still start; chat will error until Ollama is up."
 fi
 
+echo "==> Generating specs into specs/ (not committed)"
+bash "$ROOT/scripts/train-aor.sh"
+if [[ -f "$ROOT/specs/training/results/latest.md" ]]; then
+  echo "    Chatbot will use specs/training/results/latest.md"
+else
+  echo "    No train report yet. Run npm run train before chatting."
+  echo "    The chatbot refuses to answer until that file exists."
+fi
+
 export OLLAMA_BASE_URL OLLAMA_CHAT_MODEL
 export TRIPSPEC_ROOT="$ROOT"
 cd apps/chat

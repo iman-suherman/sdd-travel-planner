@@ -11,8 +11,8 @@ Fifty minutes. The room should leave knowing that a travel planner’s behaviour
 **Evidence to have open before you start:**
 
 - Before (live, prompt-only): [evidence/before-prompt-only-2026-09-19.md](./evidence/before-prompt-only-2026-09-19.md)
-- After (planner gate, mock, 5/5): [`specs/training/results/2026-09-18T21-23-35.md`](../specs/training/results/2026-09-18T21-23-35.md)
-- Contract: `specs/SPEC-001` through `specs/SPEC-005`
+- After: whatever `npm run train` just wrote to `specs/training/results/latest.md` (gitignored). The chatbot uses that file.
+- Contract: generated into `specs/` by `npm run demo`. Not committed.
 
 Say this in the first minute, then do not repeat it as a slogan:
 
