@@ -16,12 +16,74 @@ type Msg = {
   }>;
 };
 
-const STARTERS = [
-  "Mau ke Jepang",
-  "Dari Jakarta ke Bali tanggal 12–15 Oktober, 2 orang",
-  "Yang nomor 2, sekalian hotel",
-  "Kunci opsi 2 dan ingatkan aku sebelum berangkat",
-];
+function closingAsk(text: string): string {
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const last = paragraphs.at(-1) ?? "";
+  if (last.includes("?")) return last;
+  return (
+    text
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.includes("?"))
+      .at(-1) ?? ""
+  );
+}
+
+/** Clickable replies to the question the assistant just asked. Same trip, not another script. */
+function nextSuggestions(messages: Msg[]): string[] {
+  const users = messages.filter((m) => m.role === "user");
+  if (users.length === 0) return ["Mau ke Jepang", "Mau ke Bali", "Mau ke Singapore"];
+
+  const lastBot = [...messages].reverse().find((m) => m.role === "assistant")?.content ?? "";
+  const ask = closingAsk(lastBot);
+  if (!ask) return [];
+
+  const aboutStay = /hotel|menginap|inn|lodge/i.test(lastBot);
+  if (/pilih\s*1/i.test(ask)) {
+    return aboutStay
+      ? [
+          "Kunci opsi 1 dan ingatkan aku sebelum berangkat",
+          "Kunci opsi 2 dan ingatkan aku sebelum berangkat",
+          "Kunci opsi 3 dan ingatkan aku sebelum berangkat",
+        ]
+      : ["Yang nomor 1", "Yang nomor 2, sekalian hotel", "Yang nomor 3"];
+  }
+
+  const wantsOrigin = /berangkat dari mana|dari mana/i.test(ask);
+  const wantsDate = /kapan|tanggal/i.test(ask);
+  const wantsPeople = /berapa orang|berapa traveler/i.test(ask);
+  if (wantsOrigin || wantsDate || wantsPeople) {
+    const samples = [
+      { origin: "Dari Jakarta", date: "besok", people: "saya dan istri" },
+      { origin: "Dari Surabaya", date: "lusa", people: "2 orang" },
+      { origin: "Dari Jakarta", date: "tanggal 12–15 Oktober", people: "saya sendiri" },
+    ];
+    const lines = samples.map((sample) =>
+      [
+        wantsOrigin ? sample.origin : "",
+        wantsDate ? sample.date : "",
+        wantsPeople ? sample.people : "",
+      ]
+        .filter(Boolean)
+        .join(", "),
+    );
+    return [...new Set(lines)];
+  }
+
+  if (/kota lain|kota yang berbeda|mau kota/i.test(ask)) {
+    const thread = messages.map((m) => m.content).join("\n");
+    if (/jepang|tokyo/i.test(thread)) return ["Tokyo saja"];
+    if (/bali/i.test(thread)) return ["Bali saja"];
+    if (/singap/i.test(thread)) return ["Singapore saja"];
+  }
+
+  if (/list.*opsi|opsi yang ada/i.test(ask)) return ["Iya, list 3 opsi yang ada"];
+
+  return [];
+}
 
 type Phase = "thinking" | "typing" | null;
 
@@ -56,14 +118,17 @@ export function ChatApp() {
   ]);
   const [input, setInput] = useState("");
   const [phase, setPhase] = useState<Phase>(null);
+  const [activity, setActivity] = useState<string[]>([]);
   const [meta, setMeta] = useState<Footer | null>(null);
   const [openTool, setOpenTool] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const busy = phase !== null;
 
+  const suggestions = nextSuggestions(messages);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, phase]);
+  }, [messages, phase, activity]);
 
   async function send(text: string) {
     const trimmed = text.trim();
@@ -73,6 +138,7 @@ export function ChatApp() {
     setMessages(next);
     setInput("");
     setPhase("thinking");
+    setActivity([]);
     setMeta(null);
 
     try {
@@ -146,6 +212,15 @@ export function ChatApp() {
             .join("\n");
           if (!dataLine) continue;
           const data = JSON.parse(dataLine) as { text?: string; error?: string } & DoneMeta;
+          if (event === "log" && data.text) {
+            const line = data.text;
+            setActivity((lines) => {
+              if (line.startsWith("Ollama now") && lines.at(-1)?.startsWith("Ollama now")) {
+                return [...lines.slice(0, -1), line];
+              }
+              return [...lines, line].slice(-8);
+            });
+          }
           if (event === "error") {
             throw new Error(data.error ?? "Stream error");
           }
@@ -281,25 +356,37 @@ export function ChatApp() {
           {phase === "thinking" && (
             <div className={styles.bot}>
               <span className={styles.role}>TripSpec</span>
-              <div className={`${styles.bubble} ${styles.thinking}`}>Berpikir…</div>
+              <div className={`${styles.bubble} ${styles.thinking}`}>
+                <span className={styles.thinkingLabel}>Sedang bekerja</span>
+                <ul className={styles.activity}>
+                  {(activity.length ? activity : ["Menunggu langkah pertama…"]).map((line, i, all) => (
+                    <li key={`${i}-${line.slice(0, 24)}`} className={i === all.length - 1 ? styles.activityCurrent : undefined}>
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
           <div ref={bottomRef} />
         </div>
 
-        <div className={styles.starters}>
-          {STARTERS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={styles.chip}
-              disabled={busy}
-              onClick={() => void send(s)}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
+        {suggestions.length > 0 && (
+          <div className={styles.starters}>
+            <p className={styles.suggestLabel}>Jawaban untuk pertanyaan ini</p>
+            {suggestions.map((text) => (
+              <button
+                key={text}
+                type="button"
+                className={styles.chip}
+                disabled={busy}
+                onClick={() => void send(text)}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        )}
 
         <form className={styles.composer} onSubmit={onSubmit}>
           <input

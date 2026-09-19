@@ -213,7 +213,13 @@
   color: var(--sand-dim);
 }
 
-.thinking::after {
+.thinkingLabel {
+  display: inline-block;
+  color: var(--sand);
+  font-style: normal;
+}
+
+.thinkingLabel::after {
   content: "";
   display: inline-block;
   width: 0.45rem;
@@ -223,6 +229,24 @@
   background: var(--accent);
   animation: pulse 1.2s ease-in-out infinite;
   vertical-align: middle;
+}
+
+.activity {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  font-style: normal;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--sand-dim);
+}
+
+.activity li + li {
+  margin-top: 0.28rem;
+}
+
+.activityCurrent {
+  color: var(--sand);
 }
 
 .caret::after {
@@ -252,6 +276,22 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.suggestLabel {
+  width: 100%;
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sand-dim);
+}
+
+.chipId {
+  margin-right: 0.4rem;
+  color: var(--accent);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
 }
 
 .chip {

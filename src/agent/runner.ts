@@ -134,7 +134,9 @@ function tracePayload(
   onTrace(
     "   Wait  Ollama reads the local GGUF for this model, samples the next token, appends it, and repeats. The file on disk is not rewritten. This is not training.",
   );
-  onTrace("   waiting for Ollama…");
+  onTrace(
+    `   waiting for Ollama…  working on the reply from ${String(body.model)}. This POST stays open until that reply is finished.`,
+  );
 }
 
 function formatBytes(n: number): string {
@@ -148,6 +150,7 @@ function startOllamaWatch(
   baseUrl: string,
   model: string,
   onTrace?: (line: string) => void,
+  startedAt = Date.now(),
 ): () => void {
   if (!onTrace) return () => {};
   const url = `${baseUrl.replace(/\/$/, "")}/api/ps`;
@@ -155,47 +158,49 @@ function startOllamaWatch(
   let last = "";
   const tick = async () => {
     if (stopped) return;
+    const secs = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+    let line: string;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(1500) });
       if (!res.ok) {
-        const line = `   Ollama now  GET ${url} returned HTTP ${res.status}. The chat POST is still running.`;
-        if (line !== last) {
-          last = line;
-          onTrace(line);
-        }
-        return;
-      }
-      const data = (await res.json()) as {
-        models?: Array<{
-          name?: string;
-          model?: string;
-          size?: number;
-          size_vram?: number;
-          context_length?: number;
-          details?: { parameter_size?: string; quantization_level?: string };
-        }>;
-      };
-      const models = data.models ?? [];
-      const stem = model.split(":")[0];
-      const hit =
-        models.find((item) => (item.name ?? item.model ?? "").includes(stem)) ?? models[0];
-      const line = hit
-        ? `   Ollama now  ${hit.name ?? hit.model ?? model} is in memory (${formatBytes(hit.size_vram || hit.size || 0)}${hit.details?.parameter_size ? `, ${hit.details.parameter_size}` : ""}${hit.details?.quantization_level ? ` ${hit.details.quantization_level}` : ""}${hit.context_length ? `, context ${hit.context_length}` : ""}). It is on the token loop for this POST.`
-        : `   Ollama now  GET ${url} shows no model yet. It is loading the GGUF into memory, then the token loop starts.`;
-      if (line !== last) {
-        last = line;
-        onTrace(line);
+        line = `   Ollama now  ${secs}s  still generating the reply. GET ${url} returned HTTP ${res.status}. The chat POST is the work in progress.`;
+      } else {
+        const data = (await res.json()) as {
+          models?: Array<{
+            name?: string;
+            model?: string;
+            size?: number;
+            size_vram?: number;
+            context_length?: number;
+            details?: { parameter_size?: string; quantization_level?: string };
+          }>;
+        };
+        const models = data.models ?? [];
+        const stem = model.split(":")[0] ?? model;
+        const hit = models.find((item) => {
+          const name = item.name ?? item.model ?? "";
+          return name === model || name.startsWith(`${stem}:`) || name === stem;
+        });
+        const spec = hit
+          ? `${formatBytes(hit.size_vram || hit.size || 0)}${hit.details?.parameter_size ? `, ${hit.details.parameter_size}` : ""}${hit.details?.quantization_level ? ` ${hit.details.quantization_level}` : ""}${hit.context_length ? `, context ${hit.context_length}` : ""}`
+          : "";
+        const others = models
+          .map((item) => item.name ?? item.model)
+          .filter((name): name is string => Boolean(name) && name !== (hit?.name ?? hit?.model));
+        line = hit
+          ? `   Ollama now  ${secs}s  generating the reply. ${hit.name ?? hit.model ?? model} is in memory (${spec}), sampling the next token.`
+          : `   Ollama now  ${secs}s  loading ${model} for this reply.${others.length ? ` In memory, but not this call: ${others.join(", ")}.` : " No model is loaded yet."}`;
       }
     } catch {
-      const line = `   Ollama now  could not read ${url}. The POST is still in flight. Silence here is generation, not a hang.`;
-      if (line !== last) {
-        last = line;
-        onTrace(line);
-      }
+      line = `   Ollama now  ${secs}s  still generating the reply. Could not read ${url}. The chat POST has not finished.`;
+    }
+    if (line !== last) {
+      last = line;
+      onTrace(line);
     }
   };
-  const first = setTimeout(() => void tick(), 600);
-  const timer = setInterval(() => void tick(), 4000);
+  const first = setTimeout(() => void tick(), 400);
+  const timer = setInterval(() => void tick(), 2000);
   return () => {
     stopped = true;
     clearTimeout(first);
@@ -222,9 +227,11 @@ async function ollamaChat(
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
   if (onTrace) tracePayload(url, apiKey, body, onTrace, meanings);
-  const stopWatch = startOllamaWatch(baseUrl, String(body.model ?? ""), onTrace);
-
   const started = Date.now();
+  onTrace?.(
+    `   Working  asking ${String(body.model)} at ${url}. Local tools are already done. This call blocks until the full reply is written.`,
+  );
+  const stopWatch = startOllamaWatch(baseUrl, String(body.model ?? ""), onTrace, started);
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -243,6 +250,9 @@ async function ollamaChat(
     };
     const msg = data.choices?.[0]?.message ?? data.message;
     const calls = msg?.tool_calls?.map((t) => t.function.name).join(", ");
+    onTrace?.(
+      `   Working  ${calls ? `model asked for ${calls}; running those tools next` : `reply ready, ${(msg?.content ?? "").trim().length} chars`} in ${elapsed}s.`,
+    );
     onTrace?.(
       `        ← HTTP ${res.status} in ${elapsed}s  ${calls ? `tool_calls ${calls}` : `reply ${(msg?.content ?? "").trim().length} chars`}`,
     );
@@ -271,17 +281,22 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
 
   const toolResults: ToolResult[] = [];
 
+  trace?.("   Working  this turn: local inventory first, then one model call.");
   if (opts.forceTools?.length) {
     trace?.("   Local tools (no HTTP, inventory in this repo):");
     for (const call of opts.forceTools) {
+      const meaning = toolMeaning(pack, call.name);
+      trace?.(
+        `   Working  running ${call.name}${meaning ? ` — ${meaning}` : ""} ${JSON.stringify(call.arguments)}`,
+      );
       const result = runTool(call);
       toolResults.push(result);
       const arg = JSON.stringify(call.arguments);
       trace?.(`        ${call.name} ${arg} → ${result.ok ? "ok" : "empty"}`);
-      const meaning = toolMeaning(pack, call.name);
       if (meaning) trace?.(`   Tools  ${call.name} — ${meaning}`);
     }
   } else {
+    trace?.("   Working  no local tool for this sentence. Next is the model call.");
     trace?.("   Local tools: none for this scenario.");
   }
 
@@ -304,6 +319,9 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
     }
     trainingResultsPath = report.path;
     trainingText = report.text;
+    trace?.(
+      "   Working  reading the saved train report so this reply can follow the matching scenario.",
+    );
     trace?.(
       "   Training results  chatbot is using the saved report. npm run train does not load this file.",
     );
@@ -423,6 +441,7 @@ export async function runAgent(opts: RunOptions): Promise<RunResult> {
         channel?: string;
       }>) ?? [];
     if (flights.length || hotels.length || guide || notifications.length) {
+      trace?.("   Working  model reply was empty or showed a price. Using the template instead.");
       reply = templateFallback({
         flights,
         hotels,

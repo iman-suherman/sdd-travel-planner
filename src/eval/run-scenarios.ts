@@ -341,7 +341,8 @@ function printTrace(line: string) {
   if (!text) return;
   if (text.startsWith("API") || text.startsWith("Payload")) boxText(text, blue + bold);
   else if (text.startsWith("←")) boxText(text, /HTTP 2/.test(text) ? green : red + bold);
-  else if (text.startsWith("waiting") || text.startsWith("Wait")) boxText(text, yellow + bold);
+  else if (text.startsWith("Working") || text.startsWith("waiting") || text.startsWith("Wait"))
+    boxText(text, yellow + bold);
   else if (text.startsWith("Ollama now")) boxText(text, green);
   else if (text.startsWith("Local tools") || text.startsWith("Tools")) boxText(text, magenta + bold);
   else if (text.startsWith("Chat round")) boxText(text, cyan + bold);

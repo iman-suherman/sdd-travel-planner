@@ -6,6 +6,20 @@ import { runTool } from "@tripspec/agent/tools";
 import { cursorFileHref, generateToolSpecs } from "@tripspec/specs/generate-tool-specs";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function isProgressLine(text: string): boolean {
+  return (
+    text.startsWith("Working") ||
+    text.startsWith("Ollama now") ||
+    text.startsWith("waiting") ||
+    text.startsWith("Chat round") ||
+    text.startsWith("Local tools") ||
+    text.startsWith("Training results") ||
+    text.startsWith("←") ||
+    text.includes("→")
+  );
+}
 
 type Body = {
   messages?: Array<{ role: "user" | "assistant"; content: string }>;
@@ -60,7 +74,14 @@ export async function POST(req: NextRequest) {
         );
       };
 
-      send("status", { phase: "thinking" });
+      const emit = (raw: string) => {
+        const text = raw.trim();
+        if (!text || !isProgressLine(text)) return;
+        console.log(`[chat] ${text}`);
+        send("log", { text });
+      };
+
+      emit("Working  turn started. Local tools first, then Ollama writes the reply.");
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       const training = loadLatestTrainingReport();
@@ -78,6 +99,7 @@ export async function POST(req: NextRequest) {
           messages,
           forceTools,
           useTrainingResults: true,
+          onTrace: emit,
         });
         const reply = result.reply || "(kosong)";
         const toolPreview = forceTools.map((c) => runTool(c));
